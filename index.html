@@ -897,7 +897,7 @@ async function enterCastle(){
 /* ============================ 戰鬥系統 ============================ */
 const battle = {
   active:false, enemies:[], busy:false, readyQueue:[], curHero:null,
-  particles:[], shake:{t:0,mag:0}, cine:null, terrain:2, flashWhite:0,
+  particles:[], fx:[], shake:{t:0,mag:0}, cine:null, terrain:2, flashWhite:0,
   turnCount:0, bossPhase:1, bossCharging:false, introT:0
 };
 function mkEnemy(id, i, n){
@@ -920,7 +920,7 @@ function startBattle(group, terrain){
   const seen={};
   battle.enemies.forEach(e=>{ if(nameCount[e.name]>1){ seen[e.name]=(seen[e.name]||0); e.name += ' '+String.fromCharCode(65+seen[e.name]++); } });
   battle.busy=false; battle.readyQueue=[]; battle.curHero=null;
-  battle.particles=[]; battle.cine=null; battle.terrain=terrain;
+  battle.particles=[]; battle.fx=[]; battle.cine=null; battle.terrain=terrain;
   battle.turnCount=0; battle.bossPhase=1; battle.bossCharging=false;
   battle.introT = 2.2; // 戰鬥開場立繪演出時間
   party.forEach(h=>{ h.atb=rand(0,60); h.defending=false; h.status={}; });
@@ -956,10 +956,14 @@ function popDmg(x, y, txt, color){
   $('overlayui').appendChild(el);
   setTimeout(()=>el.remove(), 1100);
 }
-function addParticles(x,y,n,color,spread=4,grav=0.1,size=4){
+function addParticles(x,y,n,color,spread=4,grav=0.1,size=4,opt){
+  opt=opt||{};
   for(let i=0;i<n;i++) battle.particles.push({
-    x, y, vx:rand(-spread,spread), vy:rand(-spread,spread)-1,
-    life:rand(0.4,0.9), maxlife:0.9, color, size:rand(size*0.5,size*1.4), grav });
+    x:x+(opt.jitter?rand(-opt.jitter,opt.jitter):0), y:y+(opt.jitter?rand(-opt.jitter,opt.jitter):0),
+    vx:rand(-spread,spread)+(opt.vx||0), vy:rand(-spread,spread)-1+(opt.vy||0),
+    life:rand(0.4,0.9)*(opt.lifeK||1), maxlife:0.9*(opt.lifeK||1),
+    color, size:rand(size*0.5,size*1.4), grav,
+    glow:opt.glow, spark:opt.spark, rot:opt.spark?rand(0,7):0 });
 }
 function shake(mag, t=0.4){ battle.shake.mag=mag; battle.shake.t=t; }
 
@@ -967,8 +971,9 @@ function shake(mag, t=0.4){ battle.shake.mag=mag; battle.shake.t=t; }
 function updateBattle(dt){
   // 粒子
   battle.particles = battle.particles.filter(p=>{
-    p.x+=p.vx; p.y+=p.vy; p.vy+=p.grav; p.life-=dt; return p.life>0;
+    p.x+=p.vx; p.y+=p.vy; p.vy+=p.grav; p.life-=dt; if(p.spark) p.rot+=0.3; return p.life>0;
   });
+  battle.fx = battle.fx.filter(f=>{ f.t+=dt; return f.t<f.dur; });
   if(battle.shake.t>0) battle.shake.t-=dt;
   if(battle.flashWhite>0) battle.flashWhite-=dt*2;
   battle.enemies.forEach(e=>{ if(e.flash>0) e.flash-=dt; });
@@ -1160,12 +1165,76 @@ async function doSpell(h, id, t){
   battle.busy=false;
   checkBattleEnd();
 }
+function addFx(fx){ fx.t=0; fx.dur=fx.dur||0.5; battle.fx.push(fx); }
 function spellVisual(elem, x, y, color){
-  if(elem==='fire'){ addParticles(x,y+10,30,'#ff8030',5,-0.15,6); addParticles(x,y,15,'#ffd040',4,-0.2,4); }
-  else if(elem==='ice'){ addParticles(x,y-20,25,'#a0e0ff',3,0.25,5); addParticles(x,y,12,'#fff',2,0.2,3); }
-  else if(elem==='thunder'){ addParticles(x,y,25,'#fff880',6,0.1,4); }
-  else if(elem==='holy'){ addParticles(x,y,35,'#ffffff',4,-0.1,5); addParticles(x,y,15,'#ffe082',3,-0.15,3); }
-  else addParticles(x,y,25,color||'#fff',5,0,5);
+  if(elem==='fire'){
+    // 上升火焰柱 + 爆燃火球 + 火花
+    addParticles(x,y+18,34,'#ff6a10',3.5,-0.28,8,{glow:true,jitter:14,lifeK:0.9});
+    addParticles(x,y,22,'#ffd050',3,-0.32,6,{glow:true,jitter:10});
+    addParticles(x,y-6,14,'#fff2c0',2,-0.36,4,{glow:true});
+    addParticles(x,y+14,16,'#ff9030',5,0.05,3,{spark:true});
+    addFx({type:'ring',x,y,r0:8,r1:70,col:'255,140,40',dur:0.4});
+    addFx({type:'flash',x,y,r:80,col:'255,180,90',dur:0.22});
+  } else if(elem==='ice'){
+    // 凝結冰晶 + 碎裂
+    addFx({type:'shards',x,y,col:'190,235,255',dur:0.55});
+    addParticles(x,y-16,26,'#bfeeff',3,0.35,5,{glow:true,jitter:16});
+    addParticles(x,y,16,'#ffffff',2.5,0.3,3,{glow:true});
+    addParticles(x,y,20,'#88c8ff',4,0.28,3,{spark:true});
+    addFx({type:'ring',x,y,r0:4,r1:58,col:'160,220,255',dur:0.45});
+  } else if(elem==='thunder'){
+    // 天降雷擊 + 電花
+    addFx({type:'bolt',x,y,col:'255,248,150',dur:0.28});
+    addFx({type:'flash',x,y,r:100,col:'255,255,200',dur:0.18});
+    addParticles(x,y,30,'#fff7a0',6,0.1,4,{glow:true,jitter:8});
+    addParticles(x,y,18,'#ffffff',7,0.05,3,{spark:true});
+  } else if(elem==='holy'){
+    // 神聖光柱 + 光環
+    addFx({type:'pillar',x,y,col:'255,250,220',dur:0.5});
+    addFx({type:'ring',x,y,r0:6,r1:76,col:'255,240,180',dur:0.5});
+    addParticles(x,y,40,'#ffffff',3,-0.14,5,{glow:true,jitter:12});
+    addParticles(x,y,20,'#ffe6a0',2.5,-0.18,4,{glow:true});
+  } else {
+    addFx({type:'ring',x,y,r0:6,r1:64,col:'220,200,255',dur:0.4});
+    addParticles(x,y,30,color||'#e0c0ff',5,0,5,{glow:true,jitter:10});
+  }
+}
+/* --- 短生命繪製特效（環、雷、冰晶、光柱） --- */
+function drawFx(){
+  for(const f of battle.fx){
+    const p = clamp(f.t/f.dur,0,1);
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    if(f.type==='ring'){
+      const r=f.r0+(f.r1-f.r0)*p;
+      ctx.globalAlpha=(1-p)*0.9; ctx.strokeStyle=`rgba(${f.col},1)`; ctx.lineWidth=6*(1-p)+1.5;
+      ctx.beginPath(); ctx.arc(f.x,f.y,r,0,7); ctx.stroke();
+    } else if(f.type==='flash'){
+      ctx.globalAlpha=(1-p); const g=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,f.r);
+      g.addColorStop(0,`rgba(${f.col},0.9)`); g.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.fill();
+    } else if(f.type==='bolt'){
+      ctx.globalAlpha=p<0.5?1:(1-p)*2; ctx.strokeStyle=`rgba(${f.col},1)`;
+      ctx.lineWidth=4; ctx.shadowColor=`rgba(${f.col},1)`; ctx.shadowBlur=14;
+      ctx.beginPath(); let yy=-20, xx=f.x; ctx.moveTo(xx,yy);
+      while(yy<f.y){ xx=f.x+ (hash2(Math.floor(yy/24),f.x)-0.5)*46; yy+=24; ctx.lineTo(xx,yy); }
+      ctx.lineTo(f.x,f.y); ctx.stroke();
+      ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.95)'; ctx.stroke();
+    } else if(f.type==='pillar'){
+      ctx.globalAlpha=(1-p)*0.85; const g=ctx.createLinearGradient(f.x,f.y-160,f.x,f.y+20);
+      g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,`rgba(${f.col},0.9)`);
+      ctx.fillStyle=g; const w=(26+Math.sin(f.t*40)*5)*(1-p*0.4);
+      ctx.beginPath(); ctx.moveTo(f.x-w,f.y+16); ctx.lineTo(f.x-w*0.5,f.y-160); ctx.lineTo(f.x+w*0.5,f.y-160); ctx.lineTo(f.x+w,f.y+16); ctx.closePath(); ctx.fill();
+    } else if(f.type==='shards'){
+      ctx.globalAlpha=1-p; ctx.strokeStyle=`rgba(${f.col},1)`; ctx.lineWidth=2.5;
+      for(let i=0;i<6;i++){ const a=i/6*7+f.x; const r=10+p*44; const cx=f.x+Math.cos(a)*r, cy=f.y+Math.sin(a)*r;
+        ctx.beginPath(); ctx.moveTo(cx-4,cy+6); ctx.lineTo(cx,cy-8); ctx.lineTo(cx+4,cy+6); ctx.stroke(); }
+    } else if(f.type==='slash'){
+      ctx.globalAlpha=p<0.4?1:(1-p)/0.6; ctx.strokeStyle=`rgba(${f.col},1)`; ctx.lineWidth=5*(1-p)+1;
+      ctx.shadowColor=`rgba(${f.col},1)`; ctx.shadowBlur=12;
+      ctx.beginPath(); ctx.moveTo(f.x-60,f.y-46); ctx.lineTo(f.x+60,f.y+46); ctx.stroke();
+    }
+    ctx.restore();
+  }
 }
 function applyDmgToEnemy(e, dmg, color, extraTxt){
   e.hp -= dmg;
@@ -1200,20 +1269,34 @@ async function doSummon(h, id){
   }
   battle.cine=null;
   battleMsg(`✨ ${s.name}——「${s.move}」！！`);
-  if(id==='bahamut'){ Snd.sfx('megaflare'); shake(14,0.9); battle.flashWhite=1.2; }
-  else if(id==='odin'){ Snd.sfx('zantetsu'); shake(9,0.5); battle.flashWhite=0.8; }
-  else { Snd.sfx(s.elem==='fire'?'fire':s.elem==='ice'?'ice':'thunder'); shake(7,0.5); }
+  if(id==='bahamut'){
+    Snd.sfx('megaflare'); shake(16,1.0); battle.flashWhite=1.3;
+    // 百萬核爆：全螢幕能量衝擊
+    for(let r=0;r<3;r++) addFx({type:'ring',x:W/2,y:H/2-40,r0:20+r*30,r1:520,col:r%2?'180,130,255':'255,240,255',dur:0.7+r*0.15});
+    addFx({type:'flash',x:W/2,y:H/2-40,r:520,col:'200,170,255',dur:0.5});
+  }
+  else if(id==='odin'){ Snd.sfx('zantetsu'); shake(10,0.5); battle.flashWhite=0.85; }
+  else { Snd.sfx(s.elem==='fire'?'fire':s.elem==='ice'?'ice':'thunder'); shake(8,0.5); }
   const targets = battle.enemies.filter(e=>e.alive);
   for(const e of targets){
     const p = enemyScreenPos(e);
     if(s.instakill && !e.noInstakill && Math.random()<s.instakill){
+      addFx({type:'slash',x:p.x,y:p.y,col:'255,255,255',dur:0.35});
       e.hp=0; e.alive=false; Snd.sfx('die');
       popDmg(p.x,p.y,'一刀兩斷！','#fff');
-      addParticles(p.x,p.y,35,'#fff',6,0.05);
+      addParticles(p.x,p.y,40,'#ffffff',7,0.06,5,{glow:true});
+      addParticles(p.x,p.y,20,'#a0c0ff',6,0.05,3,{spark:true});
       continue;
     }
-    if(s.instakill && e.noInstakill) popDmg(p.x,p.y-35,'斬鐵劍無法斬斷！','#a0b0ff');
-    spellVisual(s.elem, p.x, p.y, '#fff');
+    if(s.instakill && e.noInstakill){ addFx({type:'slash',x:p.x,y:p.y,col:'160,180,255',dur:0.35}); popDmg(p.x,p.y-35,'斬鐵劍無法斬斷！','#a0b0ff'); }
+    if(id==='bahamut'){
+      // 對每個敵人再加一發核爆衝擊
+      addFx({type:'ring',x:p.x,y:p.y,r0:8,r1:100,col:'200,170,255',dur:0.5});
+      addParticles(p.x,p.y,44,'#e8d0ff',6,0.02,7,{glow:true,jitter:18});
+      addParticles(p.x,p.y,24,'#ffffff',5,0,4,{glow:true});
+    } else if(!s.instakill){
+      spellVisual(s.elem==='none'?'holy':s.elem, p.x, p.y, '#fff');
+    }
     const dmg = magDmg(s.pow, heroMag(h), e.def, elemMult(e, s.elem));
     e.flash=0.4;
     applyDmgToEnemy(e, dmg, '#ffe082', e.weak===s.elem?'弱點！':null);
@@ -1497,13 +1580,29 @@ function drawBattle(dt){
     const p = heroScreenPos(i);
     drawHero(h, p.x, p.y);
   });
-  // 粒子
+  // 粒子（發光加成混色）
+  ctx.save();
   for(const p of battle.particles){
-    ctx.globalAlpha = clamp(p.life/p.maxlife,0,1);
-    ctx.fillStyle = p.color;
-    ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+    const a = clamp(p.life/p.maxlife,0,1);
+    ctx.globalAlpha = a;
+    if(p.glow){
+      ctx.globalCompositeOperation='lighter';
+      const gr=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size*1.8);
+      gr.addColorStop(0,p.color); gr.addColorStop(0.4,p.color); gr.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=gr;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size*1.8,0,7); ctx.fill();
+    } else {
+      ctx.globalCompositeOperation='source-over';
+      ctx.fillStyle=p.color;
+      if(p.spark){ ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot||0);
+        ctx.fillRect(-p.size*0.18,-p.size,p.size*0.36,p.size*2); ctx.restore(); }
+      else ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+    }
   }
-  ctx.globalAlpha=1;
+  ctx.restore();
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  // 繪製特效（環/雷/冰晶/光柱/斬擊）
+  drawFx();
   // 召喚演出
   if(battle.cine) drawCine(battle.cine);
   // 白閃
@@ -1627,35 +1726,137 @@ function drawHeroBust(h){
 }
 function drawBattleBG(){
   const t = battle.terrain;
-  let top,bot,ground;
-  if(t==='boss'){ top='#0a0018'; bot='#301048'; ground='#1a0a2e'; }
-  else if(t===5){ top='#181030'; bot='#403060'; ground='#2a2044'; }
-  else if(t===3){ top='#0a2818'; bot='#1a5030'; ground='#143820'; }
-  else { top='#1a3a68'; bot='#4880c0'; ground='#2a6030'; }
-  const g = ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,top); g.addColorStop(1,bot);
-  ctx.fillStyle=g; ctx.fillRect(-20,-20,W+40,H+40);
-  // 遠景
-  if(t==='boss'){
-    // 王座大廳石柱
-    ctx.fillStyle='rgba(80,50,120,0.5)';
-    for(let i=0;i<5;i++){ ctx.fillRect(60+i*200, 40, 42, 400); }
-    ctx.fillStyle='rgba(255,40,80,0.15)';
-    for(let i=0;i<5;i++){ ctx.fillRect(60+i*200, 60, 42, 8); }
-  } else {
-    ctx.fillStyle='rgba(255,255,255,0.12)';
-    ctx.beginPath(); ctx.ellipse(180,90,90,26,0,0,7); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(600,60,110,30,0,0,7); ctx.fill();
-    if(t===3){ ctx.fillStyle='rgba(10,50,25,0.8)';
-      for(let i=0;i<8;i++){ const x=i*130+20;
-        ctx.beginPath(); ctx.moveTo(x,440); ctx.lineTo(x+45,220); ctx.lineTo(x+90,440); ctx.closePath(); ctx.fill(); } }
+  const T = performance.now()/1000;
+  const HORIZON = 388;
+  if(t==='boss'){ drawBossHall(T, HORIZON); return; }
+  // ===== 天空漸層 =====
+  let sky, ground, hazeCol, mtnFar, mtnNear;
+  if(t===5){ // 暗之荒野
+    sky=[['#120a26',0],['#241640',0.55],['#3a2a5e',1]];
+    ground=['#3a2c56','#241640','#0c0818']; hazeCol='rgba(120,90,180,';
+    mtnFar='#2a1e48'; mtnNear='#1c1436';
+  } else if(t===3){ // 森林
+    sky=[['#123a5a',0],['#2a6a8a',0.5],['#6ab0a0',1]];
+    ground=['#2e7a3e','#1c5228','#0a2814']; hazeCol='rgba(180,230,200,';
+    mtnFar='#1a4a4a'; mtnNear='#123828';
+  } else { // 草原
+    sky=[['#2a6cc0',0],['#5aa0e0',0.45],['#bfe4f5',0.9],['#e8f4e0',1]];
+    ground=['#6ab84e','#3f8a34','#1e4a1c']; hazeCol='rgba(230,245,255,';
+    mtnFar='#7fa8c8'; mtnNear='#5a86a8';
   }
-  // 地面
-  const gg = ctx.createLinearGradient(0,400,0,H);
-  gg.addColorStop(0,ground); gg.addColorStop(1,'#000');
-  ctx.fillStyle=gg; ctx.fillRect(-20,400,W+40,H-380);
-  ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(-20,400); ctx.lineTo(W+20,400); ctx.stroke();
+  const g = ctx.createLinearGradient(0,-20,0,HORIZON);
+  sky.forEach(s=>g.addColorStop(s[1],s[0]));
+  ctx.fillStyle=g; ctx.fillRect(-20,-20,W+40,HORIZON+30);
+  // ===== 太陽/月光暈 =====
+  const lx = t===5?760:200, ly = t===5?90:80;
+  const halo = ctx.createRadialGradient(lx,ly,4,lx,ly,220);
+  halo.addColorStop(0, t===5?'rgba(200,180,255,0.5)':'rgba(255,250,225,0.55)');
+  halo.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=halo; ctx.fillRect(0,0,W,HORIZON);
+  if(t===5){ ctx.fillStyle='rgba(225,220,255,0.85)'; ctx.beginPath(); ctx.arc(lx,ly,34,0,7); ctx.fill();
+    ctx.fillStyle=sky[1][0]; ctx.beginPath(); ctx.arc(lx-14,ly-6,30,0,7); ctx.fill(); }
+  // ===== 雲層（緩慢飄移） =====
+  ctx.save();
+  for(let i=0;i<5;i++){
+    const seed=i*97.3;
+    const cx=((seed*60 + T*(6+i*3)) % (W+300))-150;
+    const cy=50+ (i*47)%150; const s=0.7+ (i%3)*0.35;
+    ctx.fillStyle=`${hazeCol}${0.10+0.06*(i%3)})`;
+    puff(cx,cy,60*s,20*s); puff(cx+40*s,cy+6,46*s,16*s); puff(cx-42*s,cy+8,40*s,14*s);
+  }
+  ctx.restore();
+  // ===== 遠山（兩層視差） =====
+  drawRidge(HORIZON, mtnFar, 0.62, 150, 8.1, T*2, t!==5);
+  drawRidge(HORIZON, mtnNear, 0.80, 110, 5.3, T*3+40, t!==5);
+  // ===== 森林樹線 =====
+  if(t===3){
+    ctx.fillStyle='#0e3018';
+    for(let x=-20;x<W+20;x+=54){
+      const h=70+Math.sin(x*0.6)*18;
+      ctx.beginPath(); ctx.moveTo(x,HORIZON); ctx.lineTo(x+27,HORIZON-h); ctx.lineTo(x+54,HORIZON); ctx.closePath(); ctx.fill();
+    }
+  }
+  // 地平線霧氣
+  const hz=ctx.createLinearGradient(0,HORIZON-40,0,HORIZON+10);
+  hz.addColorStop(0,'rgba(255,255,255,0)'); hz.addColorStop(1,`${hazeCol}0.35)`);
+  ctx.fillStyle=hz; ctx.fillRect(0,HORIZON-40,W,50);
+  // ===== 地面（透視地板） =====
+  const gg=ctx.createLinearGradient(0,HORIZON,0,H);
+  gg.addColorStop(0,ground[0]); gg.addColorStop(0.5,ground[1]); gg.addColorStop(1,ground[2]);
+  ctx.fillStyle=gg; ctx.fillRect(-20,HORIZON,W+40,H-HORIZON+20);
+  // 透視線（往消失點收斂）
+  ctx.strokeStyle='rgba(0,0,0,0.10)'; ctx.lineWidth=1.5;
+  const vx=W/2;
+  for(let i=-6;i<=6;i++){ ctx.beginPath(); ctx.moveTo(vx+i*70,HORIZON); ctx.lineTo(vx+i*300,H+20); ctx.stroke(); }
+  for(let j=1;j<=6;j++){ const yy=HORIZON+Math.pow(j/6,1.8)*(H-HORIZON); ctx.beginPath(); ctx.moveTo(-20,yy); ctx.lineTo(W+20,yy); ctx.stroke(); }
+  // 地面斑塊紋理
+  for(let i=0;i<70;i++){
+    const yy=HORIZON+8+hash2(i,3)*(H-HORIZON-8);
+    const depth=(yy-HORIZON)/(H-HORIZON);
+    const xx=hash2(i,9)*W;
+    const sz=2+depth*7;
+    ctx.fillStyle= hash2(i,5)>0.5? `rgba(255,255,255,${0.05+depth*0.05})` : `rgba(0,0,0,${0.06+depth*0.06})`;
+    if(t===3||t===2||t===undefined){ // 草叢
+      ctx.strokeStyle=ctx.fillStyle; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(xx,yy); ctx.lineTo(xx-sz*0.4,yy-sz*1.6); ctx.moveTo(xx,yy); ctx.lineTo(xx+sz*0.4,yy-sz*1.6); ctx.stroke();
+    } else { ctx.fillRect(xx,yy,sz*1.6,sz*0.7); }
+  }
+  // 地平線亮邊
+  ctx.strokeStyle='rgba(255,255,255,0.22)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(-20,HORIZON); ctx.lineTo(W+20,HORIZON); ctx.stroke();
+}
+function puff(x,y,rx,ry){ ctx.beginPath(); ctx.ellipse(x,y,rx,ry,0,0,7); ctx.fill(); }
+function drawRidge(horizon, color, hf, amp, freq, phase, snow){
+  ctx.fillStyle=color;
+  ctx.beginPath(); ctx.moveTo(-20,horizon);
+  const base=horizon-amp*0.4;
+  for(let x=-20;x<=W+20;x+=16){
+    const y=base - (Math.sin((x+phase)/60*Math.cos(freq))*0.5+0.5)*amp*hf
+                 - (Math.sin((x+phase)*0.013+freq)*0.5+0.5)*amp*0.5*hf;
+    ctx.lineTo(x,y);
+  }
+  ctx.lineTo(W+20,horizon); ctx.closePath(); ctx.fill();
+  if(snow){ // 雪頂高光
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    for(let x=-20;x<=W+20;x+=16){
+      const y=base - (Math.sin((x+phase)/60*Math.cos(freq))*0.5+0.5)*amp*hf
+                   - (Math.sin((x+phase)*0.013+freq)*0.5+0.5)*amp*0.5*hf;
+      if(y<base-amp*0.32) ctx.fillRect(x,y,16,5);
+    }
+  }
+}
+function drawBossHall(T, horizon){
+  // 深淵王座大廳
+  const g=ctx.createLinearGradient(0,-20,0,H);
+  g.addColorStop(0,'#0a0018'); g.addColorStop(0.5,'#1a0e30'); g.addColorStop(1,'#050208');
+  ctx.fillStyle=g; ctx.fillRect(-20,-20,W+40,H+40);
+  // 中央詭光
+  const halo=ctx.createRadialGradient(W/2,180,20,W/2,180,360);
+  halo.addColorStop(0,`rgba(150,40,220,${0.20+0.06*Math.sin(T*2)})`); halo.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=halo; ctx.fillRect(0,0,W,H);
+  // 尖拱石柱（透視）
+  for(let i=0;i<6;i++){
+    const cx=90+i*156; const w=44;
+    const cg=ctx.createLinearGradient(cx,0,cx+w,0);
+    cg.addColorStop(0,'#0e0820'); cg.addColorStop(0.5,'#241640'); cg.addColorStop(1,'#0e0820');
+    ctx.fillStyle=cg; ctx.fillRect(cx,20,w,horizon-20);
+    // 柱頂尖拱
+    ctx.beginPath(); ctx.moveTo(cx-4,24); ctx.lineTo(cx+w/2,2); ctx.lineTo(cx+w+4,24); ctx.closePath(); ctx.fill();
+    // 火盆微光
+    const fl=0.5+0.5*Math.sin(T*5+i);
+    ctx.fillStyle=`rgba(255,80,140,${0.3+0.4*fl})`;
+    ctx.beginPath(); ctx.ellipse(cx+w/2,60,6,10+fl*4,0,0,7); ctx.fill();
+  }
+  // 地板
+  const gg=ctx.createLinearGradient(0,horizon,0,H);
+  gg.addColorStop(0,'#1c1030'); gg.addColorStop(1,'#050208');
+  ctx.fillStyle=gg; ctx.fillRect(-20,horizon,W+40,H-horizon+20);
+  ctx.strokeStyle='rgba(150,60,200,0.18)'; ctx.lineWidth=1.5;
+  const vx=W/2;
+  for(let i=-6;i<=6;i++){ ctx.beginPath(); ctx.moveTo(vx+i*70,horizon); ctx.lineTo(vx+i*320,H+20); ctx.stroke(); }
+  for(let j=1;j<=5;j++){ const yy=horizon+Math.pow(j/5,1.9)*(H-horizon); ctx.beginPath(); ctx.moveTo(-20,yy); ctx.lineTo(W+20,yy); ctx.stroke(); }
+  ctx.strokeStyle='rgba(200,80,255,0.3)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(-20,horizon); ctx.lineTo(W+20,horizon); ctx.stroke();
 }
 /* --- 我方角色繪製 --- */
 function drawHero(h, x, y){
