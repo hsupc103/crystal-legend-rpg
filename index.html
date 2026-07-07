@@ -1858,59 +1858,185 @@ function drawBossHall(T, horizon){
   ctx.strokeStyle='rgba(200,80,255,0.3)'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(-20,horizon); ctx.lineTo(W+20,horizon); ctx.stroke();
 }
-/* --- 我方角色繪製 --- */
+/* --- 我方角色繪製（精緻立繪版，含輪廓、陰影、邊緣光、待機動畫） --- */
+// 描邊填充輔助：先填色再描深色輪廓
+function ol(fill, out){
+  ctx.fillStyle=fill; ctx.fill();
+  if(out!==null){ ctx.strokeStyle=out||'#15101f'; ctx.lineWidth=1.8; ctx.lineJoin='round'; ctx.stroke(); }
+}
+function pathRR(x,y,w,hh,r){ ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+hh,r); ctx.arcTo(x+w,y+hh,x,y+hh,r);
+  ctx.arcTo(x,y+hh,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 function drawHero(h, x, y){
   const dead = h.hp<=0;
   const acting = battle.curHero===h;
   const ox = acting? -18 : 0;
-  ctx.save(); ctx.translate(x+ox, y);
-  if(dead){ ctx.translate(0,14); ctx.rotate(1.35); ctx.globalAlpha=0.6; }
-  if(h.status.stone) ctx.filter='grayscale(1)';
+  const bob = dead?0:Math.sin(performance.now()/520 + h.idx*1.7)*1.6; // 待機呼吸
+  const T = performance.now()/1000;
+  ctx.save(); ctx.translate(x+ox, y+bob);
+  if(dead){ ctx.translate(0,16); ctx.rotate(1.4); ctx.globalAlpha=0.55; }
+  if(h.status.stone) ctx.filter='grayscale(1) brightness(0.85)';
   // 影子
-  ctx.fillStyle='rgba(0,0,0,0.35)';
-  ctx.beginPath(); ctx.ellipse(0, 30, 18, 6, 0, 0, 7); ctx.fill();
-  const c = h.color;
-  if(h.idx===0){ // 聖騎士
-    ctx.fillStyle='#a02838'; ctx.fillRect(-16,-8,6,32); // 披風
-    ctx.fillStyle=c; ctx.fillRect(-10,-6,20,24);
-    ctx.fillStyle='#88b0ff'; ctx.fillRect(-10,-6,20,7);
-    ctx.fillStyle='#f0c8a0'; ctx.fillRect(-7,-20,14,13);
-    ctx.fillStyle='#4868d8'; ctx.fillRect(-9,-25,18,7);
-    ctx.fillStyle='#ffe082'; ctx.fillRect(-9,-27,18,3);
-    ctx.fillStyle='#000'; ctx.fillRect(-4,-15,2,3); ctx.fillRect(2,-15,2,3);
-    // 劍
-    ctx.fillStyle='#e8ecff'; ctx.fillRect(12,-30,4,34);
-    ctx.fillStyle='#ffe082'; ctx.fillRect(8,2,12,4);
-  } else if(h.idx===1){ // 黑魔導士
-    ctx.fillStyle='#302048'; ctx.fillRect(-11,-4,22,24); // 長袍
-    ctx.fillStyle=c; ctx.fillRect(-11,-4,22,6);
-    ctx.fillStyle='#f0c8a0'; ctx.fillRect(-6,-17,12,12);
-    ctx.fillStyle='#000'; ctx.fillRect(-3,-12,2,3); ctx.fillRect(2,-12,2,3);
-    // 尖帽
-    ctx.fillStyle='#403060';
-    ctx.beginPath(); ctx.moveTo(-13,-16); ctx.lineTo(2,-38); ctx.lineTo(13,-16); ctx.closePath(); ctx.fill();
-    ctx.fillStyle=c; ctx.fillRect(-13,-18,26,4);
-    // 法杖
-    ctx.fillStyle='#8a5a2a'; ctx.fillRect(13,-24,3,42);
-    ctx.fillStyle='#c060ff'; ctx.beginPath(); ctx.arc(14.5,-27,5,0,7); ctx.fill();
-  } else { // 召喚士
-    ctx.fillStyle='#186850'; ctx.fillRect(-11,-4,22,24);
-    ctx.fillStyle=c; ctx.fillRect(-11,-4,22,6);
-    ctx.fillStyle='#f0c8a0'; ctx.fillRect(-6,-17,12,12);
-    ctx.fillStyle='#2a9070'; ctx.fillRect(-8,-21,16,6); // 髮飾
-    ctx.fillStyle='#40d0a0'; ctx.fillRect(-8,-23,16,3);
-    ctx.fillStyle='#000'; ctx.fillRect(-3,-12,2,3); ctx.fillRect(2,-12,2,3);
-    // 鞭
-    ctx.strokeStyle='#c0a060'; ctx.lineWidth=2.5;
-    ctx.beginPath(); ctx.moveTo(12,-4); ctx.quadraticCurveTo(26,4,20,18); ctx.stroke();
-  }
+  ctx.fillStyle='rgba(0,0,0,0.32)';
+  ctx.beginPath(); ctx.ellipse(0, 31, 19, 6, 0, 0, 7); ctx.fill();
+  if(h.idx===0) drawPaladin(T, acting);
+  else if(h.idx===1) drawBlackMage(T, acting);
+  else drawSummoner(T, acting);
   ctx.restore();
   // 行動中的黃色游標
   if(acting){
-    ctx.fillStyle='#ffe082';
-    const bob = Math.sin(performance.now()/150)*4;
-    ctx.beginPath(); ctx.moveTo(x-8,y-48+bob); ctx.lineTo(x+8,y-48+bob); ctx.lineTo(x,y-38+bob); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#ffe082'; ctx.strokeStyle='#8a6a10'; ctx.lineWidth=1;
+    const b2 = Math.sin(performance.now()/150)*4;
+    ctx.beginPath(); ctx.moveTo(x-9,y-54+b2); ctx.lineTo(x+9,y-54+b2); ctx.lineTo(x,y-42+b2); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
+}
+// ===== 聖騎士 塞德里克 =====
+function drawPaladin(T, acting){
+  const sway = Math.sin(T*1.6)*2;
+  // 披風（身後，右下飄動）
+  ctx.beginPath();
+  ctx.moveTo(-4,-14); ctx.quadraticCurveTo(20+sway,-4,16+sway,30);
+  ctx.quadraticCurveTo(6,20,2,14); ctx.lineTo(-4,-6); ctx.closePath();
+  ol('#8e2436');
+  ctx.beginPath(); ctx.moveTo(2,-8); ctx.quadraticCurveTo(14+sway,2,12+sway,26); ctx.quadraticCurveTo(6,16,2,10); ctx.closePath();
+  ctx.fillStyle='#b8384c'; ctx.fill();
+  // 雙腿護脛
+  pathRR(-9,10,8,20,3); ol('#2f52a8');
+  pathRR(1,10,8,20,3); ol('#3a5fb8');
+  ctx.fillStyle='#87acec'; ctx.fillRect(-8,12,2,14); ctx.fillRect(2,12,2,14); // 高光
+  pathRR(-9,26,8,5,2); ol('#d9a441'); pathRR(1,26,8,5,2); ol('#d9a441'); // 金靴
+  // 軀幹胸甲
+  ctx.beginPath(); ctx.moveTo(-10,-8); ctx.lineTo(10,-8); ctx.lineTo(9,13); ctx.lineTo(-9,13); ctx.closePath(); ol('#3a63c4');
+  ctx.fillStyle='#8bb2f2'; ctx.beginPath(); ctx.moveTo(-10,-8); ctx.lineTo(-4,-8); ctx.lineTo(-4,13); ctx.lineTo(-9,13); ctx.closePath(); ctx.fill(); // 左側高光
+  ctx.fillStyle='#284a9e'; ctx.beginPath(); ctx.moveTo(6,-8); ctx.lineTo(10,-8); ctx.lineTo(9,13); ctx.lineTo(6,13); ctx.closePath(); ctx.fill(); // 右側陰影
+  ctx.fillStyle='#e7c257'; ctx.fillRect(-1,-8,2,21); // 中線金飾
+  // 胸口寶石
+  ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(4,1); ctx.lineTo(0,5); ctx.lineTo(-4,1); ctx.closePath(); ol('#ffe27a','#8a6a10');
+  // 腰帶
+  pathRR(-10,11,20,4,2); ol('#6a4a24');
+  // 肩甲
+  ctx.beginPath(); ctx.ellipse(-11,-7,6,5,0,0,7); ol('#3a63c4'); ctx.fillStyle='#9bbcf5'; ctx.beginPath(); ctx.ellipse(-12,-8,3,2.4,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(11,-7,6,5,0,0,7); ol('#2f52a8');
+  // 遠手（後方，垂放）
+  pathRR(8,-4,5,14,2.5); ol('#3a5fb8');
+  ctx.fillStyle='#f1cba1'; ctx.beginPath(); ctx.arc(10.5,11,2.6,0,7); ctx.fill();
+  // 頭
+  pathRR(-6,-30,12,15,5); ol('#f2cfa6');
+  ctx.fillStyle='#e0b487'; ctx.beginPath(); ctx.moveTo(4,-28); ctx.lineTo(6,-28); ctx.lineTo(5,-16); ctx.lineTo(3,-16); ctx.closePath(); ctx.fill(); // 臉右陰影
+  // 銀白頭髮
+  ctx.beginPath(); ctx.moveTo(-7,-20); ctx.quadraticCurveTo(-8,-33,0,-33); ctx.quadraticCurveTo(9,-34,7,-22);
+  ctx.lineTo(5,-24); ctx.quadraticCurveTo(4,-30,-2,-29); ctx.quadraticCurveTo(-6,-28,-5,-20); ctx.closePath(); ol('#e9edf6');
+  ctx.fillStyle='#c4ccdc'; ctx.beginPath(); ctx.moveTo(4,-30); ctx.quadraticCurveTo(9,-30,7,-22); ctx.lineTo(5,-24); ctx.closePath(); ctx.fill();
+  // 金冠
+  ctx.fillStyle='#ffd257'; ctx.fillRect(-6,-22,12,2.2);
+  ctx.fillStyle='#c89020'; ctx.fillRect(-6,-20.5,12,0.8);
+  // 眼睛
+  ctx.fillStyle='#26406a'; ctx.fillRect(-3.5,-25,2,2.6); ctx.fillRect(1.5,-25,2,2.6);
+  ctx.fillStyle='#fff'; ctx.fillRect(-3.5,-25,0.8,1);
+  // 近手 + 聖劍（前方，舉劍）
+  const lunge = acting?Math.sin(T*8)*2:0;
+  ctx.save(); ctx.translate(-9,-2+lunge*0.2);
+  // 劍身
+  const bg=ctx.createLinearGradient(-14,-34,-2,4);
+  bg.addColorStop(0,'#ffffff'); bg.addColorStop(0.5,'#cdd8ef'); bg.addColorStop(1,'#8f9fc4');
+  ctx.beginPath(); ctx.moveTo(-2,2); ctx.lineTo(1,-1); ctx.lineTo(-11,-34); ctx.lineTo(-14,-33); ctx.closePath();
+  ctx.fillStyle=bg; ctx.fill(); ctx.strokeStyle='#5a6a8e'; ctx.lineWidth=1; ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(-12.5,-33); ctx.lineTo(-3,-1); ctx.stroke();
+  // 劍光
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.35+0.15*Math.sin(T*4);
+  ctx.strokeStyle='#bcd0ff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-12.5,-33); ctx.lineTo(-3,-1); ctx.stroke(); ctx.restore();
+  // 護手
+  pathRR(-6,0,10,3.5,1.5); ol('#ffd257','#8a6a10');
+  // 握把 + 手
+  ctx.fillStyle='#6a4a24'; ctx.fillRect(-2,3,3,5);
+  ctx.beginPath(); ctx.arc(-0.5,4,3,0,7); ol('#f1cba1');
+  ctx.restore();
+}
+// ===== 黑魔導士 艾莉絲 =====
+function drawBlackMage(T, acting){
+  const sway=Math.sin(T*1.4)*1.5;
+  // 長袍
+  ctx.beginPath();
+  ctx.moveTo(-8,-6); ctx.lineTo(8,-6); ctx.quadraticCurveTo(13,20,10+sway,30);
+  ctx.lineTo(-10+sway,30); ctx.quadraticCurveTo(-13,20,-8,-6); ctx.closePath(); ol('#3a2358');
+  ctx.fillStyle='#513178'; ctx.beginPath(); ctx.moveTo(-8,-6); ctx.lineTo(-1,-6); ctx.lineTo(-3,30); ctx.lineTo(-10+sway,30); ctx.quadraticCurveTo(-13,20,-8,-6); ctx.closePath(); ctx.fill(); // 左高光
+  ctx.fillStyle='#2a1842'; ctx.beginPath(); ctx.moveTo(3,-6); ctx.lineTo(8,-6); ctx.quadraticCurveTo(13,20,10+sway,30); ctx.lineTo(5,30); ctx.closePath(); ctx.fill(); // 右陰影
+  // 金色符文緣飾
+  ctx.strokeStyle='#e7c257'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(-9+sway*0.6,29); ctx.quadraticCurveTo(0,24,10+sway*0.6,29); ctx.stroke();
+  ctx.fillStyle='#e7c257'; ctx.fillRect(-1,-4,2,30);
+  // 領口
+  pathRR(-6,-8,12,4,2); ol('#8b62c8');
+  // 雙手（袖中），近手持杖
+  ctx.fillStyle='#f1cba1'; ctx.beginPath(); ctx.arc(-9,6,2.6,0,7); ctx.fill();
+  // 頭（帽簷陰影下）
+  pathRR(-6,-24,12,13,5); ol('#e9c39c');
+  ctx.fillStyle='#caa079'; ctx.fillRect(-6,-24,12,4); // 帽簷投影
+  ctx.fillStyle='#d8ac82'; ctx.beginPath(); ctx.moveTo(4,-22); ctx.lineTo(6,-22); ctx.lineTo(5,-12); ctx.lineTo(3,-12); ctx.closePath(); ctx.fill();
+  // 紫髮（兩側垂落）
+  ctx.beginPath(); ctx.moveTo(-6,-18); ctx.quadraticCurveTo(-9,-6,-6,2); ctx.lineTo(-4,2); ctx.quadraticCurveTo(-5,-8,-4,-18); ctx.closePath(); ol('#7a3ba8');
+  ctx.beginPath(); ctx.moveTo(6,-18); ctx.quadraticCurveTo(9,-6,6,2); ctx.lineTo(4,2); ctx.quadraticCurveTo(5,-8,4,-18); ctx.closePath(); ol('#652f92');
+  // 眼睛
+  ctx.fillStyle='#5a2a8a'; ctx.fillRect(-3.5,-19,2,2.6); ctx.fillRect(1.5,-19,2,2.6);
+  ctx.fillStyle='#e0b0ff'; ctx.fillRect(-3.5,-19,0.8,1);
+  // 尖頂魔女帽
+  ctx.beginPath();
+  ctx.moveTo(-11,-22); ctx.quadraticCurveTo(-6,-26,7,-24);
+  ctx.quadraticCurveTo(2,-46,-16,-40); ctx.quadraticCurveTo(-13,-30,-11,-22); ctx.closePath(); ol('#432a63');
+  ctx.fillStyle='#5a3a82'; ctx.beginPath(); ctx.moveTo(-11,-23); ctx.quadraticCurveTo(-10,-33,-15,-39); ctx.quadraticCurveTo(-13,-30,-11,-23); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#e7c257'; ctx.beginPath(); ctx.moveTo(-11,-22); ctx.quadraticCurveTo(-2,-25,7,-23.5); ctx.lineTo(7,-25.5); ctx.quadraticCurveTo(-2,-27,-11,-24); ctx.closePath(); ctx.fill(); // 帽帶
+  ctx.fillStyle='#8b62c8'; ctx.beginPath(); ctx.arc(-1,-24,1.8,0,7); ctx.fill(); // 帽章
+  // 法杖（前方）
+  ctx.save(); ctx.translate(-11,0);
+  ctx.strokeStyle='#7a4a24'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(2,14); ctx.lineTo(-1,-22); ctx.stroke();
+  ctx.strokeStyle='#a06a34'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(1.4,14); ctx.lineTo(-1.4,-22); ctx.stroke();
+  // 頂端水晶 + 光暈
+  const pulse=0.6+0.4*Math.sin(T*4);
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=pulse;
+  const gg=ctx.createRadialGradient(-1,-25,0,-1,-25,9); gg.addColorStop(0,'#e0a0ff'); gg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(-1,-25,9,0,7); ctx.fill(); ctx.restore();
+  ctx.beginPath(); ctx.moveTo(-1,-31); ctx.lineTo(3,-25); ctx.lineTo(-1,-20); ctx.lineTo(-5,-25); ctx.closePath(); ol('#c060ff','#5a2a8a');
+  ctx.fillStyle='#f0c0ff'; ctx.beginPath(); ctx.moveTo(-1,-31); ctx.lineTo(1,-27); ctx.lineTo(-1,-25); ctx.lineTo(-3,-27); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+// ===== 召喚士 米雅 =====
+function drawSummoner(T, acting){
+  const sway=Math.sin(T*1.5)*2;
+  // 長髮（身後）
+  ctx.beginPath(); ctx.moveTo(6,-24); ctx.quadraticCurveTo(15+sway,-6,10+sway,26); ctx.quadraticCurveTo(6,14,3,-8); ctx.closePath(); ol('#1f8f74');
+  // 裙裝
+  ctx.beginPath(); ctx.moveTo(-8,-4); ctx.lineTo(8,-4); ctx.quadraticCurveTo(13,20,9+sway*0.5,30);
+  ctx.lineTo(-9+sway*0.5,30); ctx.quadraticCurveTo(-12,18,-8,-4); ctx.closePath(); ol('#268f76');
+  ctx.fillStyle='#3fb897'; ctx.beginPath(); ctx.moveTo(-8,-4); ctx.lineTo(-1,-4); ctx.lineTo(-3,30); ctx.lineTo(-9+sway*0.5,30); ctx.quadraticCurveTo(-12,18,-8,-4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#186a58'; ctx.beginPath(); ctx.moveTo(3,-4); ctx.lineTo(8,-4); ctx.quadraticCurveTo(13,20,9+sway*0.5,30); ctx.lineTo(5,30); ctx.closePath(); ctx.fill();
+  // 白金前襟 + 金飾
+  ctx.fillStyle='#eef5f0'; ctx.beginPath(); ctx.moveTo(-3,-4); ctx.lineTo(3,-4); ctx.lineTo(2,26); ctx.lineTo(-2,26); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#e7c257'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(-9+sway*0.4,29); ctx.quadraticCurveTo(0,24,9+sway*0.4,29); ctx.stroke();
+  // 幻獸鱗片肩飾
+  pathRR(-10,-7,7,5,2.5); ol('#3fb897'); pathRR(3,-7,7,5,2.5); ol('#2a8f76');
+  ctx.fillStyle='#e7c257'; ctx.fillRect(-9,-6,5,1.4); ctx.fillRect(4,-6,5,1.4);
+  // 遠手
+  ctx.fillStyle='#f1cba1'; ctx.beginPath(); ctx.arc(9,8,2.4,0,7); ctx.fill();
+  // 頭
+  pathRR(-6,-24,12,14,5); ol('#f2cfa6');
+  ctx.fillStyle='#e0b487'; ctx.beginPath(); ctx.moveTo(4,-22); ctx.lineTo(6,-22); ctx.lineTo(5,-11); ctx.lineTo(3,-11); ctx.closePath(); ctx.fill();
+  // 瀏海
+  ctx.beginPath(); ctx.moveTo(-7,-16); ctx.quadraticCurveTo(-8,-27,0,-27); ctx.quadraticCurveTo(8,-28,7,-17);
+  ctx.lineTo(5,-19); ctx.quadraticCurveTo(4,-24,-1,-24); ctx.quadraticCurveTo(-6,-24,-5,-16); ctx.closePath(); ol('#2aa885');
+  ctx.fillStyle='#48c8a4'; ctx.beginPath(); ctx.moveTo(-6,-18); ctx.quadraticCurveTo(-6,-25,-1,-25); ctx.lineTo(-2,-21); ctx.closePath(); ctx.fill();
+  // 金冠 + 綠寶石
+  ctx.fillStyle='#ffd257'; ctx.fillRect(-6,-19,12,2);
+  ctx.beginPath(); ctx.moveTo(0,-22); ctx.lineTo(2.4,-19.5); ctx.lineTo(0,-17); ctx.lineTo(-2.4,-19.5); ctx.closePath(); ol('#42e0a0','#1a7a5a');
+  // 眼睛（翡翠綠）
+  ctx.fillStyle='#1a7a5a'; ctx.fillRect(-3.5,-16,2,2.6); ctx.fillRect(1.5,-16,2,2.6);
+  ctx.fillStyle='#aef0d4'; ctx.fillRect(-3.5,-16,0.8,1);
+  // 近手 + 召喚水晶（前方）
+  const pulse=0.6+0.4*Math.sin(T*3.5);
+  ctx.fillStyle='#f1cba1'; ctx.beginPath(); ctx.arc(-9,4,2.6,0,7); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=pulse;
+  const gg=ctx.createRadialGradient(-11,-4,0,-11,-4,12); gg.addColorStop(0,'#a0f0ff'); gg.addColorStop(0.5,'#40c0e0'); gg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(-11,-4,12,0,7); ctx.fill(); ctx.restore();
+  ctx.beginPath(); ctx.arc(-11,-4,3.4,0,7); ol('#8fe6ff','#2a7a9a');
+  ctx.fillStyle='#e8ffff'; ctx.beginPath(); ctx.arc(-12,-5,1.3,0,7); ctx.fill();
 }
 /* --- 魔物繪製（原創設計） --- */
 function drawMonster(e){
