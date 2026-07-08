@@ -1931,17 +1931,27 @@ function drawPaladin(T, acting){
   // === 大頭 ===
   pathRR(-14,-26,28,31,13); ol('#f4d1a8');
   ctx.save(); pathRR(-14,-26,28,31,13); ctx.clip(); ctx.fillStyle='rgba(150,95,60,0.16)'; ctx.fillRect(5,-26,9,31); ctx.restore();
-  // 銀白瀏海
+  // 銀白亂翹短髮（尖刺剪影，突破頭型輪廓，不像蛋殼）
   ctx.beginPath();
-  ctx.moveTo(-14,-7); ctx.quadraticCurveTo(-16,-27,0,-28); ctx.quadraticCurveTo(16,-27,14,-7);
-  ctx.lineTo(10,-11); ctx.quadraticCurveTo(8,-16,5,-12); ctx.quadraticCurveTo(2.5,-16.5,0,-12); ctx.quadraticCurveTo(-2.5,-16,-5,-12); ctx.quadraticCurveTo(-8,-16,-10,-11); ctx.closePath();
+  ctx.moveTo(-13,-8);
+  ctx.quadraticCurveTo(-17,-12,-14,-17);        // 左鬢角
+  ctx.lineTo(-18,-22); ctx.lineTo(-11,-21);     // 左側外翹
+  ctx.lineTo(-11,-31); ctx.lineTo(-5,-23);      // 左上尖刺
+  ctx.lineTo(-1,-34); ctx.lineTo(2,-24);        // 頭頂尖刺
+  ctx.lineTo(8,-31); ctx.lineTo(8,-22);         // 右上尖刺
+  ctx.lineTo(16,-23); ctx.lineTo(11,-17);       // 右側外翹
+  ctx.quadraticCurveTo(16,-12,12,-8);           // 右鬢角
+  // 不規則瀏海尖端（露出額頭）
+  ctx.lineTo(9,-14); ctx.lineTo(6,-9);
+  ctx.lineTo(4,-15); ctx.lineTo(1,-10);
+  ctx.lineTo(-2,-16); ctx.lineTo(-5,-9);
+  ctx.lineTo(-8,-14); ctx.lineTo(-10,-9);
+  ctx.closePath();
   ol('#e9edf6');
-  ctx.save(); ctx.clip(); ctx.fillStyle='#c6cede'; ctx.fillRect(4,-28,12,22); ctx.restore();
-  // 髮絲細節（取代頭環，更自然）
-  ctx.strokeStyle='rgba(180,190,210,0.9)'; ctx.lineWidth=1.2; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(-9,-24); ctx.quadraticCurveTo(-6,-27,-2,-26.5); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(1,-27); ctx.quadraticCurveTo(6,-26.5,9,-23); ctx.stroke();
-  ctx.lineCap='butt';
+  ctx.save(); ctx.clip();
+  ctx.fillStyle='#c6cede'; ctx.beginPath(); ctx.moveTo(2,-34); ctx.lineTo(17,-23); ctx.lineTo(14,-8); ctx.lineTo(5,-8); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.moveTo(-10,-21); ctx.lineTo(-5,-24); ctx.lineTo(-7,-14); ctx.closePath(); ctx.fill();
+  ctx.restore();
   // 眼 + 臉
   chibiEye(-6,-5,'#26508a'); chibiEye(6,-5,'#26508a'); chibiFace(-5);
   // 聖劍（前）
@@ -1964,20 +1974,43 @@ function drawBlackMage(T, acting){
   ctx.strokeStyle='#e7c257'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(-10+sway*0.6,30); ctx.quadraticCurveTo(0,25,11+sway*0.6,30); ctx.stroke();
   // 袖口手
   ctx.fillStyle='#f4d1a8'; ctx.beginPath(); ctx.arc(-10,12,2.6,0,7); ctx.fill();
+  // 腦後長髮（大髮量垂至肩後）
+  ctx.beginPath(); ctx.moveTo(-13,-16); ctx.quadraticCurveTo(-20,0,-15,16); ctx.quadraticCurveTo(-8,21,0,20); ctx.quadraticCurveTo(8,21,15,16); ctx.quadraticCurveTo(20,0,13,-16); ctx.quadraticCurveTo(0,-24,-13,-16); ctx.closePath(); ol('#5a2f86');
   // === 大頭 ===
   pathRR(-14,-24,28,30,13); ol('#eec59e');
-  ctx.save(); pathRR(-14,-24,28,30,13); ctx.clip(); ctx.fillStyle='rgba(90,50,110,0.22)'; ctx.fillRect(-14,-24,28,8); ctx.restore(); // 帽簷投影
-  // 紫髮兩側
-  ctx.beginPath(); ctx.moveTo(-13,-12); ctx.quadraticCurveTo(-16,4,-11,10); ctx.lineTo(-8,9); ctx.quadraticCurveTo(-11,0,-9,-12); ctx.closePath(); ol('#7a3ba8');
-  ctx.beginPath(); ctx.moveTo(13,-12); ctx.quadraticCurveTo(16,4,11,10); ctx.lineTo(8,9); ctx.quadraticCurveTo(11,0,9,-12); ctx.closePath(); ol('#652f92');
+  ctx.save(); pathRR(-14,-24,28,30,13); ctx.clip(); ctx.fillStyle='rgba(150,95,60,0.14)'; ctx.fillRect(5,-24,9,30); ctx.restore();
+  // 紫髮兩側髮束
+  ctx.beginPath(); ctx.moveTo(-13,-12); ctx.quadraticCurveTo(-17,4,-12,14); ctx.lineTo(-8,12); ctx.quadraticCurveTo(-11,0,-9,-12); ctx.closePath(); ol('#7a3ba8');
+  ctx.beginPath(); ctx.moveTo(13,-12); ctx.quadraticCurveTo(17,4,12,14); ctx.lineTo(8,12); ctx.quadraticCurveTo(11,0,9,-12); ctx.closePath(); ol('#652f92');
+  // 頂部秀髮（柔軟中分瀏海 + 翹髮絲，突破輪廓）
+  ctx.beginPath();
+  ctx.moveTo(-14,-5);
+  ctx.quadraticCurveTo(-17,-16,-11,-23);
+  ctx.lineTo(-14,-29); ctx.lineTo(-7,-25);      // 左翹髮
+  ctx.quadraticCurveTo(0,-29,7,-25);
+  ctx.lineTo(12,-29); ctx.lineTo(10,-23);       // 右翹髮
+  ctx.quadraticCurveTo(17,-16,14,-5);
+  // 柔和波浪瀏海內緣（露出額頭）
+  ctx.quadraticCurveTo(12,-9,9,-13);
+  ctx.quadraticCurveTo(6,-8,3,-14);
+  ctx.quadraticCurveTo(0,-8,-4,-14);
+  ctx.quadraticCurveTo(-8,-8,-11,-13);
+  ctx.quadraticCurveTo(-13,-8,-14,-5);
+  ctx.closePath();
+  ol('#7a3ba8');
+  ctx.save(); ctx.clip();
+  ctx.fillStyle='#9a5cc8'; ctx.beginPath(); ctx.moveTo(-14,-24); ctx.lineTo(-4,-28); ctx.lineTo(-8,-8); ctx.lineTo(-14,-6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#4e2678'; ctx.beginPath(); ctx.moveTo(8,-27); ctx.lineTo(15,-20); ctx.lineTo(14,-5); ctx.lineTo(8,-8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // 呆毛
+  ctx.strokeStyle='#7a3ba8'; ctx.lineWidth=2.2; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,-27); ctx.quadraticCurveTo(2,-33,6,-32); ctx.stroke(); ctx.lineCap='butt';
+  // 星形小髮夾（右側）
+  ctx.save(); ctx.translate(9,-18); ctx.rotate(0.3); ctx.fillStyle='#ffd257';
+  ctx.beginPath(); for(let i=0;i<5;i++){ const a=-Math.PI/2+i*4*Math.PI/5; ctx.lineTo(Math.cos(a)*3.2,Math.sin(a)*3.2); } ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#8a6a10'; ctx.lineWidth=0.8; ctx.stroke(); ctx.restore();
   // 眼 + 臉
   chibiEye(-6,-4,'#7a2ab0'); chibiEye(6,-4,'#7a2ab0'); chibiFace(-4);
-  // 尖頂魔女帽
-  ctx.beginPath(); ctx.moveTo(-15,-14); ctx.quadraticCurveTo(0,-20,15,-14); ctx.quadraticCurveTo(12,-16,10,-18); ctx.quadraticCurveTo(4,-50,-20,-40); ctx.quadraticCurveTo(-13,-20,-15,-14); ctx.closePath(); ol('#432a63');
-  ctx.save(); ctx.clip(); ctx.fillStyle='#5a3a82'; ctx.beginPath(); ctx.moveTo(-20,-40); ctx.quadraticCurveTo(-8,-46,0,-40); ctx.lineTo(-6,-16); ctx.lineTo(-15,-14); ctx.closePath(); ctx.fill(); ctx.restore();
-  // 帽帶 + 帽章
-  ctx.fillStyle='#e7c257'; ctx.beginPath(); ctx.moveTo(-13,-14); ctx.quadraticCurveTo(0,-19,12,-14.5); ctx.lineTo(12,-17); ctx.quadraticCurveTo(0,-21.5,-13,-16.5); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#c060ff'; ctx.beginPath(); ctx.arc(-1,-16,2,0,7); ol('#c060ff','#5a2a8a');
   // 法杖（前）
   ctx.save(); ctx.translate(-12,4);
   ctx.strokeStyle='#7a4a24'; ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(2,16); ctx.lineTo(-1,-16); ctx.stroke();
@@ -2007,12 +2040,26 @@ function drawSummoner(T, acting){
   // === 大頭 ===
   pathRR(-14,-25,28,31,13); ol('#f4d1a8');
   ctx.save(); pathRR(-14,-25,28,31,13); ctx.clip(); ctx.fillStyle='rgba(150,95,60,0.15)'; ctx.fillRect(5,-25,9,31); ctx.restore();
-  // 青綠瀏海
+  // 青綠柔軟瀏海（波浪髮束 + 翹髮，突破輪廓）
   ctx.beginPath();
-  ctx.moveTo(-14,-6); ctx.quadraticCurveTo(-16,-26,0,-27); ctx.quadraticCurveTo(16,-26,14,-6);
-  ctx.lineTo(10,-10); ctx.quadraticCurveTo(8,-15,5,-11); ctx.quadraticCurveTo(2.5,-15.5,0,-11); ctx.quadraticCurveTo(-2.5,-15,-5,-11); ctx.quadraticCurveTo(-8,-15,-10,-10); ctx.closePath();
+  ctx.moveTo(-14,-4);
+  ctx.quadraticCurveTo(-17,-15,-10,-23);
+  ctx.lineTo(-12,-28); ctx.lineTo(-5,-24);     // 左翹髮
+  ctx.quadraticCurveTo(1,-28,7,-24);
+  ctx.lineTo(12,-28); ctx.lineTo(10,-22);      // 右翹髮
+  ctx.quadraticCurveTo(16,-14,14,-4);
+  // 波浪瀏海內緣（露出額頭）
+  ctx.quadraticCurveTo(12,-8,9,-12);
+  ctx.quadraticCurveTo(6,-7,3,-13);
+  ctx.quadraticCurveTo(0,-7,-4,-13);
+  ctx.quadraticCurveTo(-7,-7,-10,-12);
+  ctx.quadraticCurveTo(-12,-7,-14,-4);
+  ctx.closePath();
   ol('#2aa885');
-  ctx.save(); ctx.clip(); ctx.fillStyle='#48c8a4'; ctx.fillRect(-16,-27,10,20); ctx.restore();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle='#48c8a4'; ctx.beginPath(); ctx.moveTo(-14,-24); ctx.lineTo(-3,-27); ctx.lineTo(-8,-7); ctx.lineTo(-14,-5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#187a60'; ctx.beginPath(); ctx.moveTo(8,-26); ctx.lineTo(14,-18); ctx.lineTo(14,-4); ctx.lineTo(8,-8); ctx.closePath(); ctx.fill();
+  ctx.restore();
   // 側邊小花髮夾（取代頭環，更可愛）
   for(let i=0;i<5;i++){ const a=i/5*Math.PI*2;
     ctx.beginPath(); ctx.ellipse(9+Math.cos(a)*2.6,-19+Math.sin(a)*2.6,1.8,1.8,0,0,7);
