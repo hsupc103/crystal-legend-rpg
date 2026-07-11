@@ -355,7 +355,8 @@ const party = HERO_DEFS.map((d,i)=>{
   return h;
 });
 const inv = { gil:999999, items:{potion:5, phoenix:2},
-  ownedW:{sw0:1,st0:1,wp0:1}, ownedA:{ar0:1,rb0:1,rc0:1} };
+  ownedW:{sw0:1,st0:1,wp0:1}, ownedA:{ar0:1,rb0:1,rc0:1},
+  hasBird:false, hasAirship:false };
 let bossDefeated = false;
 
 /* --- 存檔系統 --- */
@@ -365,6 +366,7 @@ function saveGame(){
     party: party.map(h=>({lv:h.lv,exp:h.exp,hp:h.hp,mp:h.mp,maxhp:h.maxhp,maxmp:h.maxmp,
       atk:h.atk,def:h.def,mag:h.mag,spd:h.spd,weapon:h.weapon,armor:h.armor})),
     gil:inv.gil, items:inv.items, ownedW:inv.ownedW, ownedA:inv.ownedA,
+    hasBird:inv.hasBird, hasAirship:inv.hasAirship, mode:player.mode,
     px:player.x, py:player.y, bossDefeated
   };
   try{ localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; }
@@ -379,6 +381,7 @@ function loadGame(){
       party[i].status={}; party[i].defending=false; party[i].atb=0;
     });
     inv.gil=d.gil; inv.items=d.items||{}; inv.ownedW=d.ownedW||{}; inv.ownedA=d.ownedA||{};
+    inv.hasBird=!!d.hasBird; inv.hasAirship=!!d.hasAirship; player.mode=d.mode||0;
     player.x=d.px; player.y=d.py; bossDefeated=!!d.bossDefeated;
     return true;
   }catch(e){ return false; }
@@ -455,7 +458,7 @@ function genMap(){
   for(let y=23;y<=25;y++) for(let x=20;x<=24;x++) if(map[y][x]===3||map[y][x]===4) map[y][x]=2;
 }
 genMap();
-const player = { x:22, y:24, dir:0, step:0, moving:false };
+const player = { x:22, y:24, dir:0, step:0, moving:false, mode:0 }; // mode: 0走路 1路行鳥 2飛空艇
 let camX=0, camY=0, stepsSinceBattle=0, waterT=0;
 
 function walkable(x,y){
@@ -546,9 +549,13 @@ function drawTile(t, sx, sy, x, y){
   }
 }
 function drawPlayer(sx, sy){
+  const T2 = performance.now()/1000;
   const bob = player.moving ? Math.sin(player.step*0.5)*2 : 0;
-  const x = sx+TILE/2, y = sy+TILE/2+bob;
+  const x = sx+TILE/2;
   ctx.save();
+  if(player.mode===2){ drawAirship(x, sy, T2); ctx.restore(); return; }
+  if(player.mode===1){ drawRideBird(x, sy, bob, T2); ctx.restore(); return; }
+  const y = sy+TILE/2+bob;
   // 影子
   ctx.fillStyle='rgba(0,0,0,0.3)';
   ctx.beginPath(); ctx.ellipse(x, sy+TILE-3, 10, 4, 0, 0, 7); ctx.fill();
@@ -563,6 +570,100 @@ function drawPlayer(sx, sy){
   // 披風
   ctx.fillStyle='#a02838'; ctx.fillRect(x-9, y-1, 3, 10); ctx.fillRect(x+6, y-1, 3, 10);
   ctx.restore();
+}
+/* --- 路行鳥（黃色大鳥坐騎，原創設計） --- */
+function drawRideBird(x, sy, bob, T2){
+  const y = sy+TILE/2+bob;
+  const run = player.moving ? Math.sin(player.step*0.9)*5 : 0;
+  // 影子
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(x, sy+TILE-2, 13, 4.5, 0, 0, 7); ctx.fill();
+  // 尾羽（三根）
+  for(let i=0;i<3;i++){
+    ctx.beginPath(); ctx.moveTo(x-8,y+2);
+    ctx.quadraticCurveTo(x-18-i*3, y-4-i*4+Math.sin(T2*6+i)*2, x-14-i*3, y+6-i*2);
+    ctx.quadraticCurveTo(x-11,y+6,x-8,y+4); ctx.closePath();
+    ctx.fillStyle=i%2?'#e0a810':'#f4c520'; ctx.fill();
+    ctx.strokeStyle='#8a6208'; ctx.lineWidth=1; ctx.stroke();
+  }
+  // 雙腳（奔跑擺動）
+  ctx.strokeStyle='#e08818'; ctx.lineWidth=2.5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(x-4,y+8); ctx.lineTo(x-4+run,y+15); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+4,y+8); ctx.lineTo(x+4-run,y+15); ctx.stroke();
+  ctx.lineCap='butt';
+  // 鳥身（渾圓）
+  ctx.beginPath(); ctx.ellipse(x,y+2,11,9,0,0,7);
+  ctx.fillStyle='#f4c520'; ctx.fill(); ctx.strokeStyle='#8a6208'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.fillStyle='#ffdf6a'; ctx.beginPath(); ctx.ellipse(x-3,y,5,5.5,0,0,7); ctx.fill(); // 高光
+  // 小翅膀
+  ctx.beginPath(); ctx.ellipse(x+7,y+2,4.5,6,0.4,0,7);
+  ctx.fillStyle='#e0a810'; ctx.fill(); ctx.strokeStyle='#8a6208'; ctx.lineWidth=1; ctx.stroke();
+  // 鳥頭（長頸前伸）
+  ctx.beginPath(); ctx.arc(x+9,y-10,6,0,7);
+  ctx.fillStyle='#f4c520'; ctx.fill(); ctx.strokeStyle='#8a6208'; ctx.lineWidth=1.5; ctx.stroke();
+  // 頭羽
+  ctx.beginPath(); ctx.moveTo(x+6,y-15); ctx.quadraticCurveTo(x+4,y-21,x+9,y-18);
+  ctx.quadraticCurveTo(x+9,y-22,x+12,y-17); ctx.closePath();
+  ctx.fillStyle='#e0a810'; ctx.fill();
+  // 橘色尖喙
+  ctx.beginPath(); ctx.moveTo(x+14,y-11); ctx.lineTo(x+21,y-9); ctx.lineTo(x+14,y-7); ctx.closePath();
+  ctx.fillStyle='#f08828'; ctx.fill(); ctx.strokeStyle='#a05a12'; ctx.lineWidth=1; ctx.stroke();
+  // 圓眼
+  ctx.fillStyle='#2a2010'; ctx.beginPath(); ctx.arc(x+10,y-11,1.8,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x+9.4,y-11.6,0.7,0,7); ctx.fill();
+  // 騎在背上的勇者（迷你）
+  ctx.fillStyle='#2850c0'; ctx.fillRect(x-6,y-12,10,8);
+  ctx.fillStyle='#a02838'; ctx.fillRect(x-8,y-11,3,7); // 披風
+  ctx.fillStyle='#f0c8a0'; ctx.fillRect(x-5,y-19,8,7);
+  ctx.fillStyle='#e9edf6'; ctx.fillRect(x-6,y-22,10,4); // 銀髮
+  ctx.fillStyle='#000'; ctx.fillRect(x-3,y-17,1.5,2); ctx.fillRect(x,y-17,1.5,2);
+}
+/* --- 飛空艇（原創設計） --- */
+function drawAirship(x, sy, T2){
+  const alt = 16 + Math.sin(T2*2.2)*3; // 飛行高度浮動
+  const y = sy+TILE/2-alt;
+  // 地面投影
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(x, sy+TILE-2, 17, 5, 0, 0, 7); ctx.fill();
+  // 側翼
+  ctx.beginPath(); ctx.moveTo(x-8,y+2); ctx.lineTo(x-26,y+7); ctx.lineTo(x-10,y+8); ctx.closePath();
+  ctx.fillStyle='#8a5a2a'; ctx.fill(); ctx.strokeStyle='#4a2e12'; ctx.lineWidth=1.2; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+8,y+2); ctx.lineTo(x+26,y+7); ctx.lineTo(x+10,y+8); ctx.closePath();
+  ctx.fillStyle='#7a4e22'; ctx.fill(); ctx.stroke();
+  // 船身（木質流線）
+  const hg=ctx.createLinearGradient(x,y-4,x,y+12);
+  hg.addColorStop(0,'#c89050'); hg.addColorStop(0.5,'#a06830'); hg.addColorStop(1,'#6a4218');
+  ctx.beginPath(); ctx.moveTo(x-20,y+2);
+  ctx.quadraticCurveTo(x,y-6,x+22,y+1);   // 甲板線（船首朝右）
+  ctx.quadraticCurveTo(x+15,y+12,x,y+12);
+  ctx.quadraticCurveTo(x-16,y+12,x-20,y+2); ctx.closePath();
+  ctx.fillStyle=hg; ctx.fill(); ctx.strokeStyle='#3a2410'; ctx.lineWidth=1.6; ctx.stroke();
+  // 金色船首飾 + 龍骨線
+  ctx.beginPath(); ctx.moveTo(x+22,y+1); ctx.lineTo(x+28,y-2); ctx.lineTo(x+23,y+4); ctx.closePath();
+  ctx.fillStyle='#ffd257'; ctx.fill(); ctx.strokeStyle='#8a6a10'; ctx.lineWidth=1; ctx.stroke();
+  ctx.strokeStyle='rgba(255,220,140,0.6)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x-17,y+5); ctx.quadraticCurveTo(x,y+1,x+19,y+4); ctx.stroke();
+  // 小船艙
+  ctx.fillStyle='#8a5a2a'; ctx.fillRect(x-6,y-6,12,7);
+  ctx.strokeStyle='#3a2410'; ctx.lineWidth=1.2; ctx.strokeRect(x-6,y-6,12,7);
+  ctx.fillStyle='#ffe082'; ctx.fillRect(x-3,y-4,3,3); // 窗燈
+  // 尾舵
+  ctx.beginPath(); ctx.moveTo(x-19,y+2); ctx.lineTo(x-27,y-6); ctx.lineTo(x-19,y-2); ctx.closePath();
+  ctx.fillStyle='#a02838'; ctx.fill(); ctx.strokeStyle='#5a1220'; ctx.lineWidth=1.2; ctx.stroke();
+  // 頂部主旋翼（旋轉模糊）
+  ctx.strokeStyle='#4a2e12'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(x,y-6); ctx.lineTo(x,y-13); ctx.stroke();
+  const spin=T2*18;
+  ctx.save(); ctx.translate(x,y-14);
+  ctx.strokeStyle='rgba(220,225,240,0.85)'; ctx.lineWidth=2.4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-14*Math.cos(spin),-2*Math.sin(spin)); ctx.lineTo(14*Math.cos(spin),2*Math.sin(spin)); ctx.stroke();
+  ctx.strokeStyle='rgba(220,225,240,0.35)'; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.ellipse(0,0,14,3,0,0,7); ctx.stroke();
+  ctx.restore(); ctx.lineCap='butt';
+  // 甲板上的勇者
+  ctx.fillStyle='#2850c0'; ctx.fillRect(x-4,y-10,8,6);
+  ctx.fillStyle='#f0c8a0'; ctx.fillRect(x-3,y-15,6,5);
+  ctx.fillStyle='#e9edf6'; ctx.fillRect(x-4,y-17,8,3);
 }
 
 /* ============================ 對話 / 訊息 ============================ */
@@ -630,6 +731,8 @@ window.addEventListener('keydown', e=>{
   else if(dialogResolve && (e.key==='Enter'||e.key===' ')) nextDialog();
   else if(activeMenuHandler) activeMenuHandler.key(e);
   else if(state==='field' && e.key==='Escape') openFieldMenu();
+  else if(state==='field' && (e.key==='r'||e.key==='R')) toggleBird();
+  else if(state==='field' && (e.key==='f'||e.key==='F')) toggleAirship();
   else if(state==='ending' && e.key==='Enter') location.reload();
 });
 window.addEventListener('keyup', e=>{ keys[e.key]=false; });
@@ -701,7 +804,7 @@ function enterField(){
   state='field';
   $('hudgil').style.display='block';
   $('hudhint').style.display='block';
-  updateHud();
+  updateHud(); updateHint();
   Snd.playSong(SONG_FIELD);
 }
 async function newGame(){
@@ -733,14 +836,20 @@ function updateField(dt){
   player.moving = (dx||dy);
   if(!dx&&!dy) return;
   const nx=player.x+dx, ny=player.y+dy;
-  if(!walkable(nx,ny)){ moveCd=0.1; return; }
+  if(player.mode===2){
+    // 飛空艇：可飛越一切，只受地圖邊界限制
+    if(nx<0||ny<0||nx>=MW||ny>=MH){ moveCd=0.05; return; }
+  } else if(!walkable(nx,ny)){ moveCd=0.1; return; }
   player.x=nx; player.y=ny; player.step++;
-  moveCd = 0.14;
+  moveCd = player.mode===2?0.055 : player.mode===1?0.085 : 0.14;
   const t = map[ny][nx];
-  if(t===6){ enterTown(); return; }
-  if(t===7){ enterCastle(); return; }
+  if(player.mode!==2){
+    if(t===6){ player.mode=0; enterTown(); return; }   // 路行鳥在鎮外等候
+    if(t===7){ player.mode=0; enterCastle(); return; }
+  }
   stepsSinceBattle++;
-  if(stepsSinceBattle>4 && (t===2||t===3||t===5)){
+  // 騎乘路行鳥或搭飛空艇時不會遭遇敵人
+  if(player.mode===0 && stepsSinceBattle>4 && (t===2||t===3||t===5)){
     const rate = t===5?0.20:0.13;
     if(Math.random()<rate){
       stepsSinceBattle=0;
@@ -748,6 +857,30 @@ function updateField(dt){
       startBattle(pool[ri(0,pool.length-1)], t);
     }
   }
+}
+/* --- 交通工具切換 --- */
+function toggleBird(){
+  if(!inv.hasBird){ flashMsg('尚未擁有路行鳥（水晶鎮的路行鳥棚有售）'); return; }
+  if(player.mode===2){ flashMsg('飛空艇航行中，請先降落！'); return; }
+  if(player.mode===1){ player.mode=0; Snd.sfx('cancel'); flashMsg('從路行鳥背上跳了下來。'); }
+  else { player.mode=1; Snd.sfx('confirm'); flashMsg('🐤 跨上路行鳥！移動加快且不會遇敵。'); }
+}
+function toggleAirship(){
+  if(!inv.hasAirship){ flashMsg('尚未擁有飛空艇（水晶鎮的飛空艇船塢有售）'); return; }
+  if(player.mode===2){
+    const t=map[player.y][player.x];
+    if(t===1||t===2||t===5){ player.mode=0; Snd.sfx('cancel'); flashMsg('⚓ 飛空艇降落了。'); }
+    else flashMsg('這裡無法降落！請在平原、沙地或荒野上空降落。');
+  } else {
+    player.mode=2; Snd.sfx('summon'); flashMsg('🚀 飛空艇起飛！可自由飛越山脈與海洋。');
+  }
+}
+function updateHint(){
+  let s='方向鍵移動｜Esc 選單';
+  if(inv.hasBird) s+='｜R 路行鳥';
+  if(inv.hasAirship) s+='｜F 飛空艇';
+  if(!inv.hasBird&&!inv.hasAirship) s+='｜草原會遇敵';
+  $('hudhint').innerHTML=s;
 }
 
 /* ============================ 城鎮 ============================ */
@@ -763,11 +896,25 @@ function townMenu(){
   activeMenuHandler = makeMenu(el, [
     {label:'⚔ 武器・防具店', value:'weapon'},
     {label:'🎒 道具店', value:'item'},
+    {label:inv.hasBird?'🐤 路行鳥棚（已擁有・按 R 騎乘）':'🐤 路行鳥棚（3000 Gil）', value:'bird', dim:inv.hasBird||inv.gil<3000},
+    {label:inv.hasAirship?'⚓ 飛空艇船塢（已擁有・按 F 起飛）':'⚓ 飛空艇船塢（50000 Gil）', value:'ship', dim:inv.hasAirship||inv.gil<50000},
     {label:'🛏 旅館（免費・全體恢復）', value:'inn'},
     {label:'🚪 離開城鎮', value:'leave'}
   ], async v=>{
     if(v==='weapon') shopMenu('weapon');
     else if(v==='item') shopMenu('item');
+    else if(v==='bird'){
+      inv.gil-=3000; inv.hasBird=true; Snd.sfx('buy'); updateHud(); updateHint();
+      closeBigmenu();
+      await showDialog(['鳥棚老闆：「這隻路行鳥就交給你啦！牠跑得飛快，魔物也追不上牠～」','獲得了 🐤 路行鳥！在原野按 <b>R</b> 即可騎乘／下騎。']);
+      townMenu();
+    }
+    else if(v==='ship'){
+      inv.gil-=50000; inv.hasAirship=true; Snd.sfx('buy'); updateHud(); updateHint();
+      closeBigmenu();
+      await showDialog(['船塢技師：「王國最後一艘飛空艇……就託付給勇者們了！」','獲得了 ⚓ 飛空艇！在原野按 <b>F</b> 起飛，可自由飛越山脈與海洋，再按 <b>F</b> 於平原上空降落。']);
+      townMenu();
+    }
     else if(v==='inn'){
       closeBigmenu();
       party.forEach(h=>{ h.hp=h.maxhp; h.mp=h.maxmp; h.status={}; });
@@ -840,13 +987,18 @@ function openFieldMenu(){
       HP ${h.hp}/${h.maxhp}　MP ${h.mp}/${h.maxmp}　下一級 ${Math.max(0,expNext(h.lv)-h.exp)} EXP<br>
       <small style="color:#a8c0ff">${w.name}／${a.name}　攻${heroAtk(h)} 防${heroDef(h)} 魔${heroMag(h)}</small></div>`;
   }).join('');
-  activeMenuHandler = makeMenu(el, [
+  const menuItems = [
     {label:'🧪 使用道具', value:'item'},
     {label:'💾 存檔', value:'save'},
-    {label:`🎵 音樂：${Snd.enabled?'開':'關'}`, value:'music'},
-    {label:'關閉選單', value:'close'}
-  ], v=>{
+    {label:`🎵 音樂：${Snd.enabled?'開':'關'}`, value:'music'}
+  ];
+  if(inv.hasBird) menuItems.push({label:player.mode===1?'🐤 下路行鳥':'🐤 騎乘路行鳥', value:'bird'});
+  if(inv.hasAirship) menuItems.push({label:player.mode===2?'⚓ 飛空艇降落':'🚀 飛空艇起飛', value:'ship'});
+  menuItems.push({label:'關閉選單', value:'close'});
+  activeMenuHandler = makeMenu(el, menuItems, v=>{
     if(v==='item') fieldItemMenu();
+    else if(v==='bird'){ closeBigmenu(); state='field'; toggleBird(); }
+    else if(v==='ship'){ closeBigmenu(); state='field'; toggleAirship(); }
     else if(v==='save'){
       closeBigmenu(); state='field';
       flashMsg(saveGame()? '💾 已存檔！' : '存檔失敗（瀏覽器不允許）');
