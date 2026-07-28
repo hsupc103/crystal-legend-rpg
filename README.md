@@ -5,8 +5,8 @@
 
 | | 遊戲 | 檔案 |
 |---|---|---|
-| 🔮 | **水晶傳說 Crystal Legend** — 致敬《FF4》的幻想 RPG | `rpg.html` |
-| 🚀 | **OMEGA STRIKE 終焉突擊** — 縱向捲軸射擊 | `shooter.html` |
+| 🔮 | **水晶傳說 Crystal Legend** — 致敬《FF4》的幻想 RPG | `rpg/index.html` |
+| 🚀 | **OMEGA STRIKE 終焉突擊** — 縱向捲軸射擊 | `shooter/index.html` |
 | 🏠 | 入口頁 | `index.html` |
 
 ---
@@ -27,6 +27,13 @@ ATB 戰鬥、召喚獸與魔法特效、城鎮與世界地圖、路行鳥坐騎�
 - **三系武器 ×5 級 + 最多 4 台僚機**，集中模式會切換成平行陣型
 - **魔王部位破壞** — 盾板／砲塔／體節各有獨立血條，打掉就少一組招式
 - CHAIN COMBO ×32、S~D 評價、CONTINUE、最高分保存於 localStorage
+- **三段難度**（選機畫面可選，預設「輕鬆」）：彈量、彈速、敵方射擊頻率、敵機耐久與殘機數都會跟著調整
+
+| 難度 | 彈量 | 彈速 | 敵方射速 | 殘機 |
+|---|---|---|---|---|
+| 輕鬆 CASUAL | 55% | 75% | 65% | 5 |
+| 標準 NORMAL | 75% | 88% | 82% | 4 |
+| 硬派 MANIAC | 100% | 100% | 100% | 3 |
 
 | 關卡 | 大魔王 | 階段 |
 |---|---|---|
@@ -38,9 +45,19 @@ ATB 戰鬥、召喚獸與魔法特效、城鎮與世界地圖、路行鳥坐騎�
 　　　　`Q / E` 或 `1 2 3` 切換武器　`P` 暫停　`M` 靜音（也支援滑鼠拖曳與觸控）
 
 **除錯用 URL 參數**：`?stage=2`（指定關卡）`?boss=3`（直接打魔王）`?phase=4`（指定魔王階段）
-`?dmg=4`（火力倍率）`?debug=1`（顯示 FPS 與實體數）`?auto=1`（自動迴避 AI）
+`?diff=easy|normal|hard`（難度）`?dmg=4`（火力倍率）`?debug=1`（顯示 FPS 與實體數）`?auto=1`（自動迴避 AI）
 
 ---
+
+## 線上遊玩
+
+| | 網址 |
+|---|---|
+| 入口頁 | https://hsupc103.github.io/crystal-legend-rpg/ |
+| 🚀 OMEGA STRIKE | https://hsupc103.github.io/crystal-legend-rpg/shooter/ |
+| 🔮 水晶傳說 | https://hsupc103.github.io/crystal-legend-rpg/rpg/ |
+
+兩款遊戲各自有獨立網址，可以單獨分享。
 
 ## 本機執行
 
