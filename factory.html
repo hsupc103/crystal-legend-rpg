@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>MECHA FACTORY — 跳舞機器人與 3D 機械工廠</title>
+<meta name="description" content="純手寫 WebGL、零函式庫、單一 HTML 檔的 3D 機械工廠動畫：齒輪牆、曲軸活塞、輸送帶焊接機械臂，以及在舞台上跟著節拍跳舞的機器人。">
+<meta name="theme-color" content="#05050f">
+<meta property="og:type" content="website">
+<meta property="og:title" content="MECHA FACTORY — 跳舞機器人與 3D 機械工廠">
+<meta property="og:description" content="齒輪、曲軸、機械臂與跳舞機器人：單檔 HTML、手寫 WebGL 的即時 3D 動畫。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23070b1c'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%234fd8ff' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23ffb547'/%3E%3C/svg%3E">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;background:#04060e;}
+  body{
+    color:#dff3ff;font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
+    -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
+  }
+  #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;}
+  #gl.drag{cursor:grabbing;}
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:2;
+    background:radial-gradient(ellipse at 50% 45%,transparent 40%,rgba(0,0,0,.62) 100%);}
+  #scan{position:fixed;inset:0;pointer-events:none;z-index:3;mix-blend-mode:overlay;opacity:.34;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.30) 0 1px,transparent 1px 3px);}
+
+  .ui{position:fixed;z-index:5;}
+
+  /* 左上：標題 */
+  #head{top:0;left:0;padding:18px 22px;pointer-events:none;}
+  .logo{font-size:clamp(19px,3.4vw,30px);font-weight:bold;letter-spacing:.13em;line-height:1.2;
+    background:linear-gradient(180deg,#ffffff,#8fe9ff 55%,#0a7fff);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 18px rgba(0,180,255,.5));}
+  .sub{margin-top:7px;font-size:11px;letter-spacing:.3em;color:#6ea6cc;}
+  .sub b{color:#ffb547;font-weight:normal;}
+
+  /* 右上：即時數據 */
+  #stat{top:0;right:0;padding:16px 20px;text-align:right;font-size:11px;line-height:1.85;
+    letter-spacing:.1em;color:#78b0d2;pointer-events:none;font-variant-numeric:tabular-nums;}
+  #stat span{color:#7ef0ff;}
+  #stat .bpm{color:#ff6fd0;}
+
+  /* 底部控制列 */
+  #bar{left:50%;bottom:0;transform:translateX(-50%);
+    display:flex;flex-wrap:wrap;gap:7px;justify-content:center;align-items:center;
+    padding:10px 12px calc(12px + env(safe-area-inset-bottom));max-width:100vw;}
+  .grp{display:flex;gap:5px;padding:5px;border-radius:12px;
+    background:linear-gradient(180deg,rgba(9,20,44,.86),rgba(4,8,22,.9));
+    border:1px solid #17405e;box-shadow:0 10px 30px rgba(0,0,0,.5);backdrop-filter:blur(6px);}
+  .grp>i{align-self:center;font-style:normal;font-size:10px;letter-spacing:.18em;
+    color:#4d7d9d;padding:0 6px 0 4px;}
+  button{
+    font-family:inherit;font-size:12px;letter-spacing:.08em;color:#a8d6f0;cursor:pointer;
+    padding:7px 11px;border-radius:8px;border:1px solid transparent;background:rgba(255,255,255,.04);
+    transition:background .15s,color .15s,border-color .15s,transform .08s;white-space:nowrap;}
+  button:hover{background:rgba(79,216,255,.16);color:#eafaff;}
+  button:active{transform:translateY(1px);}
+  button.on{background:linear-gradient(180deg,rgba(79,216,255,.30),rgba(10,127,255,.20));
+    border-color:#4fd8ff;color:#f2fdff;box-shadow:0 0 16px rgba(0,170,255,.35) inset;}
+  button.mag.on{background:linear-gradient(180deg,rgba(255,79,216,.30),rgba(190,20,150,.20));
+    border-color:#ff6fd0;box-shadow:0 0 16px rgba(255,60,180,.32) inset;}
+
+  #hint{left:50%;bottom:64px;transform:translateX(-50%);font-size:11px;letter-spacing:.2em;
+    color:#4f7f9f;pointer-events:none;white-space:nowrap;transition:opacity .6s;}
+  #cap{left:22px;bottom:70px;font-size:11.5px;letter-spacing:.16em;color:#7fc6e8;pointer-events:none;
+    text-shadow:0 0 14px rgba(0,140,220,.7);transition:opacity .45s;}
+  #cap b{display:block;font-size:15px;letter-spacing:.1em;color:#eafaff;margin-bottom:4px;font-weight:normal;}
+
+  /* 載入 */
+  #load{position:fixed;inset:0;z-index:9;background:#04060e;display:flex;
+    flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .7s;}
+  #load .l1{font-size:13px;letter-spacing:.42em;color:#4fd8ff;}
+  #load .l2{font-size:11px;letter-spacing:.24em;color:#41708c;}
+  #load.off{opacity:0;pointer-events:none;}
+  #err{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;
+    padding:30px;text-align:center;font-size:13px;line-height:2;color:#ff9ab0;background:#04060e;}
+
+  @media(max-width:720px){
+    #head{padding:12px 14px;max-width:56vw;} #stat{padding:10px 12px;font-size:9.5px;line-height:1.7;}
+    .logo{font-size:19px;} .sub{font-size:9.5px;letter-spacing:.18em;margin-top:5px;}
+    button{font-size:11px;padding:6px 8px;} .grp{padding:4px;} .grp>i{display:none;}
+    #bar{gap:5px;padding:8px 8px calc(9px + env(safe-area-inset-bottom));}
+    #cap{left:14px;top:78px;bottom:auto;} #cap b{font-size:13px;} #hint{display:none;}
+  }
+  @media(max-width:420px){ .sub{display:none;} #cap{top:60px;} }
+  @media(max-height:520px){ #cap{display:none;} }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vignette"></div>
+<div id="scan"></div>
+
+<div class="ui" id="head">
+  <div class="logo">MECHA FACTORY</div>
+  <div class="sub">跳舞機器人 × 3D 機械工廠 · <b>WEBGL</b> 單檔手寫</div>
+</div>
+
+<div class="ui" id="stat">
+  產線速度 <span id="sLine">0.00</span> m/s<br>
+  主齒輪 <span id="sRpm">0</span> RPM<br>
+  節拍 <span class="bpm" id="sBpm">120</span> BPM<br>
+  FPS <span id="sFps">0</span> · 繪製 <span id="sDraw">0</span>
+</div>
+
+<div class="ui" id="cap"><b>自動巡航</b>全廠導覽中</div>
+<div class="ui" id="hint">拖曳旋轉視角 · 滾輪縮放 · 空白鍵暫停</div>
+
+<div class="ui" id="bar">
+  <div class="grp">
+    <i>鏡頭</i>
+    <button data-cam="0" class="on">自動巡航</button>
+    <button data-cam="1">舞台</button>
+    <button data-cam="2">產線</button>
+    <button data-cam="3">齒輪牆</button>
+    <button data-cam="4">引擎</button>
+  </div>
+  <div class="grp">
+    <i>播放</i>
+    <button id="bPlay" class="on">暫停</button>
+    <button id="bSpeed">速度 ×1</button>
+  </div>
+  <div class="grp">
+    <i>效果</i>
+    <button id="bDisco" class="mag on">燈光秀</button>
+    <button id="bShadow" class="on">陰影</button>
+    <button id="bWire">線框</button>
+  </div>
+</div>
+
+<div id="load"><div class="l1">BOOTING FACTORY</div><div class="l2">編譯著色器 · 生成幾何 · 上電</div></div>
+<div id="err"></div>
+
+<script>
+"use strict";
+(function(){
+/* =====================================================================
+   MECHA FACTORY
+   純手寫 WebGL：矩陣運算、程序化幾何、場景圖、平面投影陰影、粒子。
+   無任何外部函式庫或資源，整份動畫都在這個檔案裡。
+   ===================================================================== */
+
+/* ------------------------------ 數學 ------------------------------ */
+var PI = Math.PI, TAU = PI * 2;
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+function lerp(a, b, t){ return a + (b - a) * t; }
+function smoothstep(e0, e1, x){ var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+function fract(x){ return x - Math.floor(x); }
+// 三角波（0..1..0），比 sin 更「機械」
+function tri(x){ var f = fract(x); return f < 0.5 ? f * 2 : 2 - f * 2; }
+// 帶緩動的脈衝：0 附近迅速上升再落下
+function pulse(x, w){ var f = fract(x); return f < w ? Math.sin(f / w * PI) : 0; }
+
+var m4 = {
+  create: function(){ var o = new Float32Array(16); o[0] = o[5] = o[10] = o[15] = 1; return o; },
+  ident: function(o){ o[0]=1;o[1]=0;o[2]=0;o[3]=0;o[4]=0;o[5]=1;o[6]=0;o[7]=0;
+                      o[8]=0;o[9]=0;o[10]=1;o[11]=0;o[12]=0;o[13]=0;o[14]=0;o[15]=1; return o; },
+  mul: function(o, a, b){
+    var a00=a[0],a01=a[1],a02=a[2],a03=a[3],a10=a[4],a11=a[5],a12=a[6],a13=a[7],
+        a20=a[8],a21=a[9],a22=a[10],a23=a[11],a30=a[12],a31=a[13],a32=a[14],a33=a[15];
+    for (var i = 0; i < 4; i++){
+      var b0=b[i*4], b1=b[i*4+1], b2=b[i*4+2], b3=b[i*4+3];
+      o[i*4]   = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+      o[i*4+1] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+      o[i*4+2] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+      o[i*4+3] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+    }
+    return o;
+  },
+  persp: function(o, fovy, aspect, near, far){
+    var f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+    o[0]=f/aspect;o[1]=0;o[2]=0;o[3]=0;o[4]=0;o[5]=f;o[6]=0;o[7]=0;
+    o[8]=0;o[9]=0;o[10]=(far+near)*nf;o[11]=-1;o[12]=0;o[13]=0;o[14]=2*far*near*nf;o[15]=0;
+    return o;
+  },
+  lookAt: function(o, eye, at, up){
+    var zx=eye[0]-at[0], zy=eye[1]-at[1], zz=eye[2]-at[2];
+    var l = Math.hypot(zx, zy, zz) || 1; zx/=l; zy/=l; zz/=l;
+    var xx=up[1]*zz-up[2]*zy, xy=up[2]*zx-up[0]*zz, xz=up[0]*zy-up[1]*zx;
+    l = Math.hypot(xx, xy, xz) || 1; xx/=l; xy/=l; xz/=l;
+    var yx=zy*xz-zz*xy, yy=zz*xx-zx*xz, yz=zx*xy-zy*xx;
+    o[0]=xx;o[1]=yx;o[2]=zx;o[3]=0;
+    o[4]=xy;o[5]=yy;o[6]=zy;o[7]=0;
+    o[8]=xz;o[9]=yz;o[10]=zz;o[11]=0;
+    o[12]=-(xx*eye[0]+xy*eye[1]+xz*eye[2]);
+    o[13]=-(yx*eye[0]+yy*eye[1]+yz*eye[2]);
+    o[14]=-(zx*eye[0]+zy*eye[1]+zz*eye[2]);
+    o[15]=1;
+    return o;
+  },
+  // 局部矩陣：T · Ry · Rx · Rz · S（歐拉 YXZ）
+  compose: function(o, p, r, s){
+    var cx=Math.cos(r[0]), sx=Math.sin(r[0]), cy=Math.cos(r[1]), sy=Math.sin(r[1]),
+        cz=Math.cos(r[2]), sz=Math.sin(r[2]);
+    var m00=cy*cz+sy*sx*sz, m01=-cy*sz+sy*sx*cz, m02=sy*cx;
+    var m10=cx*sz,          m11=cx*cz,           m12=-sx;
+    var m20=-sy*cz+cy*sx*sz,m21=sy*sz+cy*sx*cz,  m22=cy*cx;
+    o[0]=m00*s[0]; o[1]=m10*s[0]; o[2]=m20*s[0]; o[3]=0;
+    o[4]=m01*s[1]; o[5]=m11*s[1]; o[6]=m21*s[1]; o[7]=0;
+    o[8]=m02*s[2]; o[9]=m12*s[2]; o[10]=m22*s[2]; o[11]=0;
+    o[12]=p[0];    o[13]=p[1];    o[14]=p[2];     o[15]=1;
+    return o;
+  },
+  // 3x3 法線矩陣（逆轉置）
+  normal: function(o, m){
+    var a=m[0],b=m[1],c=m[2], d=m[4],e=m[5],f=m[6], g=m[8],h=m[9],i=m[10];
+    var A=e*i-f*h, B=f*g-d*i, C=d*h-e*g;
+    var det = a*A + b*B + c*C;
+    if (Math.abs(det) < 1e-9){ o[0]=a;o[1]=b;o[2]=c;o[3]=d;o[4]=e;o[5]=f;o[6]=g;o[7]=h;o[8]=i; return o; }
+    var id = 1 / det;
+    // inverse(M)^T
+    o[0]=A*id;              o[1]=B*id;              o[2]=C*id;
+    o[3]=(c*h-b*i)*id;      o[4]=(a*i-c*g)*id;      o[5]=(b*g-a*h)*id;
+    o[6]=(b*f-c*e)*id;      o[7]=(c*d-a*f)*id;      o[8]=(a*e-b*d)*id;
+    return o;
+  },
+  // 把幾何壓到 y = planeY 平面上的方向光陰影矩陣（d 為光線行進方向）
+  shadow: function(o, d, planeY){
+    var k = d[1];
+    if (Math.abs(k) < 1e-4) k = -1e-4;
+    var ax = d[0] / k, az = d[2] / k;
+    o[0]=1; o[1]=0; o[2]=0;  o[3]=0;
+    o[4]=-ax; o[5]=0; o[6]=-az; o[7]=0;
+    o[8]=0; o[9]=0; o[10]=1; o[11]=0;
+    o[12]=0; o[13]=planeY; o[14]=0; o[15]=1;
+    return o;
+  },
+  xformPoint: function(out, m, p){
+    var x=p[0],y=p[1],z=p[2];
+    out[0]=m[0]*x+m[4]*y+m[8]*z+m[12];
+    out[1]=m[1]*x+m[5]*y+m[9]*z+m[13];
+    out[2]=m[2]*x+m[6]*y+m[10]*z+m[14];
+    return out;
+  }
+};
+
+/* ------------------------------ WebGL 初始化 ------------------------------ */
+var canvas = document.getElementById('gl');
+var gl = null;
+try {
+  var attrs = { alpha:false, antialias:true, stencil:true, depth:true, powerPreference:'high-performance' };
+  gl = canvas.getContext('webgl2', attrs) || canvas.getContext('webgl', attrs) || canvas.getContext('experimental-webgl', attrs);
+} catch(e){}
+if (!gl){
+  var eb = document.getElementById('err');
+  eb.style.display = 'flex';
+  eb.innerHTML = '這台裝置或瀏覽器沒有可用的 WebGL。<br>請改用較新的 Chrome / Edge / Safari / Firefox，或開啟硬體加速。';
+  document.getElementById('load').classList.add('off');
+  return;
+}
+
+var VS = [
+'attribute vec3 aPos;',
+'attribute vec3 aNrm;',
+'uniform mat4 uProj, uView, uModel;',
+'uniform mat3 uNMat;',
+'varying vec3 vN, vW;',
+'varying float vDepth;',
+'void main(){',
+'  vec4 w = uModel * vec4(aPos, 1.0);',
+'  vW = w.xyz;',
+'  vN = uNMat * aNrm;',
+'  vec4 v = uView * w;',
+'  vDepth = -v.z;',
+'  gl_Position = uProj * v;',
+'}'
+].join('\n');
+
+var FS = [
+'precision highp float;',
+'varying vec3 vN, vW;',
+'varying float vDepth;',
+'uniform vec3 uColor, uEmisCol, uRimCol, uFogCol, uCam;',
+'uniform float uEmis, uSpec, uShin, uAlpha, uMode, uTime, uScroll, uShadowMode, uFog;',
+'uniform vec3 uKeyDir, uKeyCol, uAmbTop, uAmbBot;',
+'uniform vec3 uPPos[5];',
+'uniform vec3 uPCol[5];',
+'',
+'float band(float x, float w){ float f = fract(x); return smoothstep(0.5 - w, 0.5, abs(f - 0.5)); }',
+'',
+'void main(){',
+'  if (uShadowMode > 0.5){ gl_FragColor = vec4(0.0, 0.008, 0.03, uAlpha); return; }',
+'  vec3 albedo = uColor;',
+'  float emis = uEmis;',
+'  vec3 emisCol = uEmisCol;',
+'  if (uMode > 0.5){',
+'    if (uMode < 1.5){',
+'      /* 廠房地板：格線 + 中央光暈 */',
+'      float lw = clamp(0.020 + vDepth * 0.0016, 0.02, 0.24);',
+'      float gx = band(vW.x / 4.0, lw), gz = band(vW.z / 4.0, lw);',
+'      float g = max(gx, gz);',
+'      float gx2 = band(vW.x / 20.0, lw * 0.8), gz2 = band(vW.z / 20.0, lw * 0.8);',
+'      float g2 = max(gx2, gz2);',
+'      albedo = mix(albedo, vec3(0.06, 0.18, 0.26), g * 0.45);',
+'      albedo = mix(albedo, vec3(0.10, 0.34, 0.46), g2 * 0.7);',
+'      emis = g * 0.09 + g2 * 0.19;',
+'      emisCol = vec3(0.20, 0.72, 1.0);',
+'    } else if (uMode < 2.5){',
+'      /* 輸送帶：滾動的橫向紋路 */',
+'      float s = fract(vW.x * 1.15 - uScroll);',
+'      float rib = smoothstep(0.42, 0.5, abs(s - 0.5));',
+'      albedo = mix(vec3(0.055, 0.062, 0.078), vec3(0.13, 0.15, 0.18), rib);',
+'      float edge = smoothstep(1.02, 1.16, abs(vW.z - uScroll * 0.0));',
+'      albedo = mix(albedo, vec3(0.10, 0.13, 0.16), edge);',
+'    } else if (uMode < 3.5){',
+'      /* 工安斜紋 */',
+'      float s = fract((vW.x + vW.y * 1.6 + vW.z) * 0.62);',
+'      float k = step(0.5, s);',
+'      albedo = mix(vec3(0.86, 0.62, 0.10), vec3(0.10, 0.10, 0.12), k);',
+'      emis = (1.0 - k) * 0.16; emisCol = vec3(1.0, 0.72, 0.2);',
+'    } else if (uMode < 4.5){',
+'      /* 資料面板：跑動的掃描線 */',
+'      float rows = fract(vW.y * 6.0 - uTime * 1.1);',
+'      float scan = smoothstep(0.55, 0.95, rows);',
+'      float blocks = step(0.35, fract(sin(floor(vW.y * 6.0) * 13.7 + floor(vW.x * 3.0) * 7.3 + floor(uTime * 3.0)) * 43758.5453));',
+'      emis = uEmis * (0.35 + scan * 0.7 + blocks * 0.55);',
+'    } else {',
+'      /* 光束 / 霓虹：邊緣柔化 */',
+'      float f = 1.0 - abs(dot(normalize(vN), normalize(uCam - vW)));',
+'      emis = uEmis * (0.35 + f * 1.1);',
+'    }',
+'  }',
+'  vec3 N = normalize(vN);',
+'  vec3 V = normalize(uCam - vW);',
+'  if (dot(N, V) < 0.0 && uMode > 4.5) N = -N;',
+'  vec3 lit = albedo * mix(uAmbBot, uAmbTop, N.y * 0.5 + 0.5);',
+'  float d = max(dot(N, uKeyDir), 0.0);',
+'  lit += albedo * uKeyCol * d;',
+'  vec3 H = normalize(uKeyDir + V);',
+'  lit += uKeyCol * pow(max(dot(N, H), 0.0), uShin) * uSpec * step(0.001, d);',
+'  for (int i = 0; i < 5; i++){',
+'    vec3 Ld = uPPos[i] - vW;',
+'    float dist = length(Ld) + 0.001;',
+'    Ld /= dist;',
+'    float att = 1.0 / (1.0 + 0.055 * dist * dist);',
+'    float dd = max(dot(N, Ld), 0.0);',
+'    vec3 Hp = normalize(Ld + V);',
+'    lit += (albedo * dd + pow(max(dot(N, Hp), 0.0), uShin) * uSpec * 0.7) * uPCol[i] * att;',
+'  }',
+'  float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);',
+'  lit += uRimCol * rim;',
+'  lit += emisCol * emis;',
+'  float fogF = 1.0 - exp(-pow(vDepth * uFog, 2.0));',
+'  lit = mix(lit, uFogCol, clamp(fogF, 0.0, 1.0));',
+'  /* 輕度色調映射，避免霓虹過曝 */',
+'  lit = lit / (lit + vec3(0.78)) * 1.62;',
+'  gl_FragColor = vec4(lit, uAlpha);',
+'}'
+].join('\n');
+
+function compile(type, src){
+  var s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+var prog;
+try {
+  prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.bindAttribLocation(prog, 0, 'aPos');
+  gl.bindAttribLocation(prog, 1, 'aNrm');
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+} catch(e){
+  var eb2 = document.getElementById('err');
+  eb2.style.display = 'flex';
+  eb2.textContent = '著色器編譯失敗：' + e.message;
+  document.getElementById('load').classList.add('off');
+  return;
+}
+gl.useProgram(prog);
+
+var U = {};
+['uProj','uView','uModel','uNMat','uColor','uEmisCol','uRimCol','uFogCol','uCam','uEmis','uSpec',
+ 'uShin','uAlpha','uMode','uTime','uScroll','uShadowMode','uFog','uKeyDir','uKeyCol','uAmbTop',
+ 'uAmbBot','uPPos','uPCol'].forEach(function(n){ U[n] = gl.getUniformLocation(prog, n); });
+
+gl.enableVertexAttribArray(0);
+gl.enableVertexAttribArray(1);
+gl.enable(gl.DEPTH_TEST);
+gl.enable(gl.CULL_FACE);
+gl.cullFace(gl.BACK);
+
+/* ------------------------------ 幾何生成 ------------------------------ */
+// 幾何暫存：p 頂點、n 法線、i 索引
+function Geo(){ return { p: [], n: [], i: [] }; }
+
+function geoAdd(dst, src, mat){
+  var base = dst.p.length / 3;
+  var nm = new Float32Array(9);
+  if (mat) m4.normal(nm, mat);
+  for (var v = 0; v < src.p.length; v += 3){
+    var x = src.p[v], y = src.p[v+1], z = src.p[v+2];
+    var nx = src.n[v], ny = src.n[v+1], nz = src.n[v+2];
+    if (mat){
+      dst.p.push(mat[0]*x + mat[4]*y + mat[8]*z + mat[12],
+                 mat[1]*x + mat[5]*y + mat[9]*z + mat[13],
+                 mat[2]*x + mat[6]*y + mat[10]*z + mat[14]);
+      var ax = nm[0]*nx + nm[3]*ny + nm[6]*nz;
+      var ay = nm[1]*nx + nm[4]*ny + nm[7]*nz;
+      var az = nm[2]*nx + nm[5]*ny + nm[8]*nz;
+      var l = Math.hypot(ax, ay, az) || 1;
+      dst.n.push(ax/l, ay/l, az/l);
+    } else {
+      dst.p.push(x, y, z); dst.n.push(nx, ny, nz);
+    }
+  }
+  for (var k = 0; k < src.i.length; k++) dst.i.push(src.i[k] + base);
+  return dst;
+}
+
+function boxGeo(w, h, d){
+  var g = Geo(), x = w/2, y = h/2, z = d/2;
+  var faces = [
+    [[ x,-y,-z],[ x,-y, z],[ x, y, z],[ x, y,-z],[ 1, 0, 0]],
+    [[-x,-y, z],[-x,-y,-z],[-x, y,-z],[-x, y, z],[-1, 0, 0]],
+    [[-x, y,-z],[ x, y,-z],[ x, y, z],[-x, y, z],[ 0, 1, 0]],
+    [[-x,-y, z],[ x,-y, z],[ x,-y,-z],[-x,-y,-z],[ 0,-1, 0]],
+    [[-x,-y, z],[-x, y, z],[ x, y, z],[ x,-y, z],[ 0, 0, 1]],
+    [[ x,-y,-z],[ x, y,-z],[-x, y,-z],[-x,-y,-z],[ 0, 0,-1]]
+  ];
+  for (var f = 0; f < 6; f++){
+    var q = faces[f], n = q[4], b = g.p.length / 3;
+    for (var v = 0; v < 4; v++){ g.p.push(q[v][0], q[v][1], q[v][2]); g.n.push(n[0], n[1], n[2]); }
+    g.i.push(b, b+1, b+2, b, b+2, b+3);
+  }
+  return g;
+}
+
+// 沿 Y 軸的（可截頭）圓柱
+function cylGeo(rTop, rBot, h, seg, capTop, capBot){
+  var g = Geo(), y0 = -h/2, y1 = h/2;
+  var slope = (rBot - rTop) / h;
+  for (var s = 0; s < seg; s++){
+    var a0 = s / seg * TAU, a1 = (s+1) / seg * TAU;
+    var c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+    var b = g.p.length / 3;
+    g.p.push(c0*rBot, y0, s0*rBot,  c1*rBot, y0, s1*rBot,  c1*rTop, y1, s1*rTop,  c0*rTop, y1, s0*rTop);
+    var nl = Math.hypot(1, slope);
+    g.n.push(c0/nl, slope/nl, s0/nl, c1/nl, slope/nl, s1/nl, c1/nl, slope/nl, s1/nl, c0/nl, slope/nl, s0/nl);
+    g.i.push(b, b+1, b+2, b, b+2, b+3);
+  }
+  if (capTop !== false && rTop > 0){
+    var bt = g.p.length / 3;
+    g.p.push(0, y1, 0); g.n.push(0, 1, 0);
+    for (var t = 0; t <= seg; t++){ var a = t/seg*TAU; g.p.push(Math.cos(a)*rTop, y1, Math.sin(a)*rTop); g.n.push(0,1,0); }
+    for (var t2 = 0; t2 < seg; t2++) g.i.push(bt, bt+1+t2, bt+2+t2);
+  }
+  if (capBot !== false && rBot > 0){
+    var bb = g.p.length / 3;
+    g.p.push(0, y0, 0); g.n.push(0, -1, 0);
+    for (var u = 0; u <= seg; u++){ var a2 = u/seg*TAU; g.p.push(Math.cos(a2)*rBot, y0, Math.sin(a2)*rBot); g.n.push(0,-1,0); }
+    for (var u2 = 0; u2 < seg; u2++) g.i.push(bb, bb+2+u2, bb+1+u2);
+  }
+  return g;
+}
+
+function sphereGeo(r, seg, rings){
+  var g = Geo();
+  for (var y = 0; y <= rings; y++){
+    var v = y / rings, phi = v * PI;
+    for (var x = 0; x <= seg; x++){
+      var u = x / seg, th = u * TAU;
+      var nx = Math.sin(phi) * Math.cos(th), ny = Math.cos(phi), nz = Math.sin(phi) * Math.sin(th);
+      g.p.push(nx*r, ny*r, nz*r); g.n.push(nx, ny, nz);
+    }
+  }
+  for (var y2 = 0; y2 < rings; y2++){
+    for (var x2 = 0; x2 < seg; x2++){
+      var a = y2*(seg+1)+x2, b = a+seg+1;
+      g.i.push(a, b, a+1, b, b+1, a+1);
+    }
+  }
+  return g;
+}
+
+function torusGeo(R, r, seg, rseg){
+  var g = Geo();
+  for (var i = 0; i <= seg; i++){
+    var u = i/seg*TAU, cu = Math.cos(u), su = Math.sin(u);
+    for (var j = 0; j <= rseg; j++){
+      var v = j/rseg*TAU, cv = Math.cos(v), sv = Math.sin(v);
+      g.p.push((R + r*cv)*cu, r*sv, (R + r*cv)*su);
+      g.n.push(cv*cu, sv, cv*su);
+    }
+  }
+  for (var i2 = 0; i2 < seg; i2++){
+    for (var j2 = 0; j2 < rseg; j2++){
+      var a = i2*(rseg+1)+j2, b = (i2+1)*(rseg+1)+j2;
+      g.i.push(a, b, a+1, b, b+1, a+1);
+    }
+  }
+  return g;
+}
+
+// 齒輪：輪緣 + 梯形齒 + 輪轂 + 輻條，全部合併成單一網格
+function gearGeo(radius, teeth, thick){
+  var g = Geo();
+  var rimR = radius * 0.86;
+  geoAdd(g, cylGeo(rimR, rimR, thick, Math.max(18, teeth * 2), true, true), null);
+  var toothH = radius - rimR + radius * 0.18;   // 齒頂略高於節圓，嚙合才看得出來
+  var toothW = (TAU * rimR / teeth) * 0.56;
+  var mm = m4.create(), rot = m4.create(), tr = m4.create();
+  for (var t = 0; t < teeth; t++){
+    var a = t / teeth * TAU;
+    var tg = cylGeo(toothW * 0.34, toothW * 0.5, toothH, 4, true, true); // 梯形齒
+    m4.compose(rot, [0,0,0], [0, -a, 0], [1,1,1]);
+    m4.compose(tr, [rimR + toothH*0.42, 0, 0], [0, 0, PI/2], [1, 1, thick / toothW * 1.05]);
+    m4.mul(mm, rot, tr);
+    geoAdd(g, tg, mm);
+  }
+  geoAdd(g, cylGeo(radius*0.20, radius*0.20, thick*1.5, 14, true, true), null);
+  var spokes = teeth > 14 ? 6 : 4;
+  for (var s = 0; s < spokes; s++){
+    var sa = s / spokes * TAU;
+    m4.compose(mm, [Math.cos(sa)*rimR*0.55, 0, Math.sin(sa)*rimR*0.55], [0, -sa, 0], [1,1,1]);
+    var sp = boxGeo(rimR*0.72, thick*0.62, radius*0.13);
+    geoAdd(g, sp, mm);
+  }
+  return g;
+}
+
+// GPU 網格
+function Mesh(geo){
+  this.vb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
+  var inter = new Float32Array(geo.p.length * 2);
+  for (var i = 0, j = 0; i < geo.p.length; i += 3){
+    inter[j++] = geo.p[i]; inter[j++] = geo.p[i+1]; inter[j++] = geo.p[i+2];
+    inter[j++] = geo.n[i]; inter[j++] = geo.n[i+1]; inter[j++] = geo.n[i+2];
+  }
+  gl.bufferData(gl.ARRAY_BUFFER, inter, gl.STATIC_DRAW);
+  this.ib = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
+  var big = geo.p.length / 3 > 65535;
+  this.type = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+  if (big && !gl.getExtension('OES_element_index_uint') && !gl.drawBuffers){ this.type = gl.UNSIGNED_SHORT; }
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
+    this.type === gl.UNSIGNED_INT ? new Uint32Array(geo.i) : new Uint16Array(geo.i), gl.STATIC_DRAW);
+  this.count = geo.i.length;
+  this.geo = geo;
+  this.lineIb = null; this.lineCount = 0;
+}
+Mesh.prototype.lines = function(){
+  if (this.lineIb) return;
+  var idx = this.geo.i, seen = {}, out = [];
+  for (var t = 0; t < idx.length; t += 3){
+    var v = [idx[t], idx[t+1], idx[t+2]];
+    for (var e = 0; e < 3; e++){
+      var a = v[e], b = v[(e+1)%3];
+      var key = a < b ? a + '_' + b : b + '_' + a;
+      if (!seen[key]){ seen[key] = 1; out.push(a, b); }
+    }
+  }
+  this.lineIb = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.lineIb);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
+    this.type === gl.UNSIGNED_INT ? new Uint32Array(out) : new Uint16Array(out), gl.STATIC_DRAW);
+  this.lineCount = out.length;
+};
+
+var MESH = {};
+function mesh(key, build){ if (!MESH[key]) MESH[key] = new Mesh(build()); return MESH[key]; }
+var M_BOX = mesh('box', function(){ return boxGeo(1,1,1); });
+var M_CYL = mesh('cyl', function(){ return cylGeo(0.5, 0.5, 1, 20, true, true); });
+var M_TUBE = mesh('tube', function(){ return cylGeo(0.5, 0.5, 1, 14, false, false); });
+var M_CONE = mesh('cone', function(){ return cylGeo(0.02, 0.5, 1, 18, false, false); });
+var M_SPH_LO = mesh('sphlo', function(){ return sphereGeo(0.5, 8, 6); });
+var M_TORUS = mesh('torus', function(){ return torusGeo(1, 0.06, 40, 8); });
+
+/* ------------------------------ 材質 ------------------------------ */
+function mat(color, o){
+  o = o || {};
+  return {
+    color: color,
+    emis: o.emis || 0,
+    emisCol: o.emisCol || color,
+    spec: o.spec === undefined ? 0.35 : o.spec,
+    shin: o.shin === undefined ? 26 : o.shin,
+    alpha: o.alpha === undefined ? 1 : o.alpha,
+    mode: o.mode || 0,
+    blend: o.blend || null   // 'add' | 'alpha'
+  };
+}
+var C = {
+  steel:      mat([0.30, 0.34, 0.40], { spec: 0.75, shin: 46 }),
+  steelDark:  mat([0.14, 0.16, 0.20], { spec: 0.5, shin: 32 }),
+  iron:       mat([0.20, 0.22, 0.27], { spec: 0.45, shin: 24 }),
+  brass:      mat([0.62, 0.46, 0.17], { spec: 0.85, shin: 60 }),
+  copper:     mat([0.58, 0.30, 0.16], { spec: 0.8, shin: 52 }),
+  rubber:     mat([0.06, 0.065, 0.08], { spec: 0.12, shin: 10 }),
+  floor:      mat([0.055, 0.075, 0.10], { spec: 0.30, shin: 40, mode: 1 }),
+  belt:       mat([0.08, 0.09, 0.11], { spec: 0.22, shin: 16, mode: 2 }),
+  hazard:     mat([0.5, 0.4, 0.1], { spec: 0.4, shin: 20, mode: 3 }),
+  panel:      mat([0.03, 0.10, 0.14], { emis: 0.9, emisCol: [0.20, 0.85, 1.0], spec: 0.3, mode: 4 }),
+  cyan:       mat([0.05, 0.30, 0.40], { emis: 1.15, emisCol: [0.25, 0.85, 1.0], spec: 0.4 }),
+  amber:      mat([0.35, 0.22, 0.05], { emis: 1.15, emisCol: [1.0, 0.66, 0.18], spec: 0.4 }),
+  magenta:    mat([0.32, 0.06, 0.26], { emis: 1.1,  emisCol: [1.0, 0.32, 0.80], spec: 0.4 }),
+  lime:       mat([0.10, 0.30, 0.08], { emis: 1.05, emisCol: [0.55, 1.0, 0.35], spec: 0.4 }),
+  crate:      mat([0.42, 0.30, 0.14], { spec: 0.25, shin: 14 }),
+  crateAlt:   mat([0.17, 0.30, 0.36], { spec: 0.35, shin: 20 }),
+  bodyA:      mat([0.72, 0.75, 0.80], { spec: 0.8, shin: 58 }),
+  bodyB:      mat([0.24, 0.52, 0.72], { spec: 0.7, shin: 50 }),
+  bodyC:      mat([0.72, 0.26, 0.44], { spec: 0.7, shin: 50 }),
+  bodyD:      mat([0.86, 0.62, 0.18], { spec: 0.75, shin: 54 }),
+  joint:      mat([0.11, 0.12, 0.15], { spec: 0.55, shin: 40 }),
+  crateAlt2:  mat([0.30, 0.20, 0.34], { spec: 0.3, shin: 18 })
+};
+
+/* ------------------------------ 場景圖 ------------------------------ */
+var ALL = [];
+function Node(o){
+  o = o || {};
+  this.pos = o.pos || [0,0,0];
+  this.rot = o.rot || [0,0,0];
+  this.scl = o.scl || [1,1,1];
+  this.mesh = o.mesh || null;
+  this.mat = o.mat || null;
+  this.visible = true;
+  this.cast = o.cast !== false;      // 是否投射平面陰影
+  this.children = [];
+  this.world = m4.create();
+  this.local = m4.create();
+  ALL.push(this);
+}
+Node.prototype.add = function(n){ this.children.push(n); return n; };
+Node.prototype.node = function(o){ return this.add(new Node(o)); };
+// 便利建構：在此節點下加一個實體零件
+Node.prototype.part = function(msh, material, pos, rot, scl, opt){
+  return this.add(new Node({ mesh: msh, mat: material, pos: pos, rot: rot, scl: scl,
+                             cast: !(opt && opt.noShadow) }));
+};
+function box(parent, material, pos, size, rot, opt){
+  return parent.part(M_BOX, material, pos, rot || [0,0,0], size, opt);
+}
+function cyl(parent, material, pos, r, h, rot, opt){
+  return parent.part(M_CYL, material, pos, rot || [0,0,0], [r*2, h, r*2], opt);
+}
+
+var root = new Node({});
+
+/* ------------------------------ 燈光 / 環境 ------------------------------ */
+var keyDir = [0.42, 0.80, 0.43];
+(function(){ var l = Math.hypot(keyDir[0], keyDir[1], keyDir[2]); keyDir[0]/=l; keyDir[1]/=l; keyDir[2]/=l; })();
+var pPos = new Float32Array(15), pCol = new Float32Array(15);
+var FOG_COL = [0.030, 0.045, 0.078];
+
+/* =====================================================================
+   建構工廠
+   ===================================================================== */
+
+/* --- 地板 / 廠房外殼 --- */
+var roofNode = null;
+var floorNode = root.part(M_BOX, C.floor, [0, -0.5, 0], [0,0,0], [180, 1, 140], { noShadow: true });
+floorNode.cast = false;
+
+// 遠方牆面與天花板結構
+(function shell(){
+  var wall = mat([0.045, 0.055, 0.075], { spec: 0.2, shin: 14 });
+  box(root, wall, [0, 15, -46], [180, 32, 1.2], null, { noShadow: true }).cast = false;
+  box(root, wall, [-56, 15, 0], [1.2, 32, 140], null, { noShadow: true }).cast = false;
+  box(root, wall, [56, 15, 0], [1.2, 32, 140], null, { noShadow: true }).cast = false;
+  // 屋頂（相機升到屋頂之上時自動隱藏，才不會擋住自由視角）
+  roofNode = box(root, mat([0.030, 0.036, 0.052], { spec: 0.06, shin: 8 }),
+                 [0, 24.5, -4], [180, 1.2, 140], null, { noShadow: true });
+  roofNode.cast = false;
+  // 天花桁架
+  for (var i = -4; i <= 4; i++){
+    var z = i * 9;
+    box(root, C.steelDark, [0, 22.0, z], [104, 0.5, 0.5], null, { noShadow: true }).cast = false;
+    box(root, C.steelDark, [0, 20.7, z], [104, 0.35, 0.35], null, { noShadow: true }).cast = false;
+    for (var k = -5; k <= 5; k++){
+      box(root, C.steelDark, [k * 9.4, 21.35, z], [0.25, 1.4, 0.25], [0, 0, (k % 2) * 0.5 - 0.25], { noShadow: true }).cast = false;
+    }
+  }
+  // 立柱
+  var pillarX = [-40, -22, 22, 40];
+  for (var p = 0; p < pillarX.length; p++){
+    for (var q = -1; q <= 1; q += 2){
+      var px = pillarX[p], pz = q * 30;
+      box(root, C.steelDark, [px, 10.75, pz], [1.5, 21.5, 1.5], null, { noShadow: true }).cast = false;
+      box(root, C.hazard, [px, 1.1, pz], [1.75, 2.2, 1.75], null, { noShadow: true }).cast = false;
+      box(root, C.steel, [px, 0.14, pz], [2.6, 0.28, 2.6], null, { noShadow: true }).cast = false;
+    }
+  }
+  // 天花照明燈條
+  for (var L = -3; L <= 3; L++){
+    box(root, C.steelDark, [L * 13, 19.6, -6], [1.1, 0.5, 26], null, { noShadow: true }).cast = false;
+    box(root, C.cyan, [L * 13, 19.32, -6], [0.8, 0.12, 25], null, { noShadow: true }).cast = false;
+  }
+  // 背景管線
+  var pipe = mat([0.20, 0.24, 0.30], { spec: 0.6, shin: 40 });
+  for (var pi = 0; pi < 4; pi++){
+    var py = 12.5 + pi * 0.95, pz2 = -42 + pi * 0.9;
+    root.part(M_CYL, pipe, [0, py, pz2], [0, 0, PI/2], [0.55, 108, 0.55], { noShadow: true }).cast = false;
+    for (var b = -4; b <= 4; b++){
+      root.part(M_CYL, C.steel, [b * 11, py, pz2], [0, 0, PI/2], [0.72, 0.6, 0.72], { noShadow: true }).cast = false;
+    }
+  }
+})();
+
+/* --- 齒輪牆 --- */
+var gears = [];
+(function gearWall(){
+  var wallZ = -20.5;
+  var plate = mat([0.09, 0.10, 0.13], { spec: 0.35, shin: 24 });
+  box(root, plate, [0, 9.5, wallZ - 1.6], [46, 19, 1.2], null, { noShadow: true }).cast = false;
+  box(root, C.steelDark, [0, 0.35, wallZ - 1.0], [46, 0.7, 2.6], null, { noShadow: true }).cast = false;
+
+  // 主齒輪組（模數固定，半徑 = 齒數 × 模數/2，確保外觀嚙合）
+  var mod = 0.185;
+  var spec = [
+    { t: 42, x: -11.0, y: 9.2, mat: C.brass,  base: 1.0 },
+    { t: 24, x: 0,     y: 0,   mat: C.steel,  from: 0, ang: -0.42 },
+    { t: 34, x: 0,     y: 0,   mat: C.copper, from: 1, ang: 0.30 },
+    { t: 18, x: 0,     y: 0,   mat: C.steel,  from: 2, ang: -0.55 },
+    { t: 30, x: 0,     y: 0,   mat: C.brass,  from: 3, ang: 0.18 },
+    { t: 20, x: 0,     y: 0,   mat: C.copper, from: 4, ang: -0.62 }
+  ];
+  for (var i = 0; i < spec.length; i++){
+    var s = spec[i], r = s.t * mod / 2, x, y, dir, speed, phase;
+    if (s.from === undefined){
+      x = s.x; y = s.y; dir = 1; speed = 1; phase = 0;
+    } else {
+      var p = gears[s.from];
+      var dsum = (p.r + r) * 0.978;   // 略小於節圓和：齒頂剛好探進對方齒根，看得出嚙合又不穿模
+      x = p.x + Math.cos(s.ang) * dsum;
+      y = p.y + Math.sin(s.ang) * dsum;
+      dir = -p.dir;
+      speed = p.speed * p.teeth / s.t;
+      // 讓齒相互交錯的相位補正
+      phase = -p.phase * (p.teeth / s.t) + s.ang * (1 + p.teeth / s.t) + PI / s.t;
+    }
+    var thick = 0.55 + r * 0.06;
+    var g = mesh('gear' + s.t, (function(rr, tt, th){ return function(){ return gearGeo(rr, tt, th); }; })(r, s.t, thick));
+    var node = root.part(g, s.mat, [x, y, wallZ], [PI/2, 0, 0], [1, 1, 1], { noShadow: true });
+    node.cast = false;
+    // 齒輪軸與軸承座
+    root.part(M_CYL, C.steelDark, [x, y, wallZ - 0.8], [PI/2, 0, 0], [r*0.14, 2.0, r*0.14], { noShadow: true }).cast = false;
+    root.part(M_CYL, C.iron, [x, y, wallZ - 1.35], [PI/2, 0, 0], [r*0.30, 0.5, r*0.30], { noShadow: true }).cast = false;
+    gears.push({ node: node, x: x, y: y, r: r, teeth: s.t, dir: dir, speed: speed, phase: phase });
+  }
+
+  // 右側：大飛輪 + 皮帶輪
+  var fly = mesh('flywheel', function(){
+    var g2 = Geo();
+    geoAdd(g2, cylGeo(3.5, 3.5, 0.7, 40, true, true), null);
+    geoAdd(g2, cylGeo(3.9, 3.9, 0.34, 40, true, true), null);
+    var mm = m4.create();
+    for (var s2 = 0; s2 < 8; s2++){
+      var a = s2 / 8 * TAU;
+      m4.compose(mm, [Math.cos(a)*1.9, 0, Math.sin(a)*1.9], [0, -a, 0], [1,1,1]);
+      geoAdd(g2, boxGeo(3.2, 0.45, 0.42), mm);
+    }
+    geoAdd(g2, cylGeo(0.75, 0.75, 1.4, 18, true, true), null);
+    return g2;
+  });
+  var fw = root.part(fly, C.iron, [15.5, 6.4, wallZ], [PI/2, 0, 0], [1,1,1], { noShadow: true });
+  fw.cast = false;
+  gears.push({ node: fw, x: 15.5, y: 6.4, r: 3.9, teeth: 46, dir: -1, speed: 0.42, phase: 0, fly: true });
+  root.part(M_CYL, C.steelDark, [15.5, 6.4, wallZ - 1.2], [PI/2, 0, 0], [0.9, 2.6, 0.9], { noShadow: true }).cast = false;
+  // 支撐架
+  box(root, C.steelDark, [15.5, 3.0, wallZ - 1.4], [1.6, 6.4, 1.6], null, { noShadow: true }).cast = false;
+
+  // 牆上狀態面板
+  for (var pnl = 0; pnl < 3; pnl++){
+    var pxx = -22 + pnl * 1.0;
+    box(root, C.steelDark, [-20.5, 8.5 - pnl * 3.0, wallZ - 0.8], [4.6, 2.6, 0.4], null, { noShadow: true }).cast = false;
+    box(root, C.panel, [-20.5, 8.5 - pnl * 3.0, wallZ - 0.55], [4.1, 2.15, 0.1], null, { noShadow: true }).cast = false;
+  }
+})();
+
+/* --- 輸送帶產線（沿 X 軸） --- */
+var BELT_Z = -8.5, BELT_Y = 1.75, BELT_X0 = -34, BELT_X1 = 34, BELT_LEN = BELT_X1 - BELT_X0;
+var BELT_SPEED = 2.6, CRATE_GAP = 6.8;   // BELT_LEN(68) 必須是 CRATE_GAP 的整數倍
+var rollers = [];
+(function conveyor(){
+  var frame = mat([0.15, 0.17, 0.21], { spec: 0.5, shin: 30 });
+  box(root, C.belt, [0, BELT_Y, BELT_Z], [BELT_LEN, 0.18, 3.0], null, { noShadow: true }).cast = false;
+  box(root, frame, [0, BELT_Y - 0.34, BELT_Z], [BELT_LEN, 0.5, 3.3], null, { noShadow: true }).cast = false;
+  box(root, frame, [0, BELT_Y + 0.06, BELT_Z + 1.62], [BELT_LEN, 0.34, 0.24], null, { noShadow: true }).cast = false;
+  box(root, frame, [0, BELT_Y + 0.06, BELT_Z - 1.62], [BELT_LEN, 0.34, 0.24], null, { noShadow: true }).cast = false;
+  // 支腳
+  for (var x = BELT_X0 + 2; x <= BELT_X1 - 2; x += 5.4){
+    box(root, C.steelDark, [x, BELT_Y * 0.5 - 0.3, BELT_Z + 1.3], [0.34, BELT_Y - 0.6, 0.34], null, { noShadow: true }).cast = false;
+    box(root, C.steelDark, [x, BELT_Y * 0.5 - 0.3, BELT_Z - 1.3], [0.34, BELT_Y - 0.6, 0.34], null, { noShadow: true }).cast = false;
+    box(root, C.steelDark, [x, 0.06, BELT_Z], [0.9, 0.12, 3.2], null, { noShadow: true }).cast = false;
+  }
+  // 滾筒（會轉）
+  for (var rx = BELT_X0 + 1.2; rx <= BELT_X1 - 1.2; rx += 2.7){
+    var rn = root.part(M_CYL, C.steel, [rx, BELT_Y - 0.14, BELT_Z], [PI/2, 0, PI/2], [0.42, 3.0, 0.42], { noShadow: true });
+    rn.cast = false;
+    rollers.push(rn);
+  }
+  // 兩端的驅動輪罩
+  box(root, C.hazard, [BELT_X0 + 0.4, BELT_Y - 0.2, BELT_Z], [1.4, 1.5, 3.6], null, { noShadow: true }).cast = false;
+  box(root, C.hazard, [BELT_X1 - 0.4, BELT_Y - 0.2, BELT_Z], [1.4, 1.5, 3.6], null, { noShadow: true }).cast = false;
+})();
+
+// 貨箱
+var crates = [];
+(function(){
+  var n = Math.round(BELT_LEN / CRATE_GAP);
+  for (var i = 0; i < n; i++){
+    var g = new Node({ pos: [0, BELT_Y + 0.55, BELT_Z] });
+    root.add(g);
+    var m = (i % 3 === 0) ? C.crateAlt : (i % 3 === 1 ? C.crate : C.crateAlt2);
+    box(g, m, [0, 0, 0], [1.5, 0.92, 1.5]);
+    box(g, C.steelDark, [0, 0.48, 0], [1.58, 0.10, 1.58]);
+    box(g, C.steelDark, [0, -0.44, 0], [1.58, 0.10, 1.58]);
+    box(g, C.steelDark, [0, 0, 0.78], [1.30, 0.72, 0.06]);
+    box(g, (i % 3 === 0) ? C.cyan : C.amber, [0, 0.12, 0.80], [0.62, 0.18, 0.04]);
+    crates.push({ node: g, i: i, x: 0 });
+  }
+})();
+
+/* --- 焊接機械臂（2 台，跟著貨箱做作業） --- */
+var arms = [];
+function buildArm(x, z, faceSign, bodyMat){
+  var base = root.node({ pos: [x, 0, z] });
+  cyl(base, C.steelDark, [0, 0.16, 0], 1.15, 0.32).cast = true;
+  cyl(base, C.hazard, [0, 0.45, 0], 0.95, 0.30);
+  var yaw = base.node({ pos: [0, 0.6, 0] });
+  cyl(yaw, bodyMat, [0, 0.42, 0], 0.82, 0.85);
+  box(yaw, C.joint, [0, 0.95, 0], [1.5, 0.45, 1.5]);
+  var L1 = 3.3, L2 = 2.9;
+  var sh = yaw.node({ pos: [0, 1.25, 0] });
+  cyl(sh, C.joint, [0, 0, 0], 0.42, 1.1, [0, 0, PI/2]);
+  box(sh, bodyMat, [0, L1 / 2, 0], [0.62, L1, 0.72]);
+  box(sh, C.steelDark, [0.34, L1 * 0.45, 0], [0.14, L1 * 0.7, 0.5]);
+  box(sh, C.steelDark, [-0.34, L1 * 0.45, 0], [0.14, L1 * 0.7, 0.5]);
+  var el = sh.node({ pos: [0, L1, 0] });
+  cyl(el, C.joint, [0, 0, 0], 0.36, 0.95, [0, 0, PI/2]);
+  box(el, bodyMat, [0, L2 / 2, 0], [0.5, L2, 0.58]);
+  var wr = el.node({ pos: [0, L2, 0] });
+  cyl(wr, C.joint, [0, 0, 0], 0.28, 0.7, [0, 0, PI/2]);
+  // 焊槍
+  var tool = wr.node({ pos: [0, 0.45, 0] });
+  box(tool, C.steel, [0, 0.1, 0], [0.36, 0.6, 0.36]);
+  cyl(tool, C.copper, [0, 0.55, 0], 0.11, 0.6);
+  var tip = tool.node({ pos: [0, 0.92, 0] });
+  cyl(tip, C.amber, [0, 0, 0], 0.07, 0.22);
+  // 線纜（簡化為幾段管子）
+  cyl(sh, C.rubber, [0.5, L1 * 0.6, -0.3], 0.09, L1 * 0.9, [0.1, 0, 0.12]);
+  var a = { base: base, yaw: yaw, sh: sh, el: el, wr: wr, tip: tip, tool: tool,
+            x: x, z: z, L1: L1, L2: L2, faceSign: faceSign, shoulderY: 1.85, weld: 0 };
+  arms.push(a);
+  return a;
+}
+buildArm(-9, BELT_Z - 4.2, 1, C.bodyD);
+buildArm(7, BELT_Z - 4.2, 1, C.bodyB);
+
+/* --- 沖壓機（節拍同步落錘） --- */
+var press = {};
+// 貨箱抵達沖壓機正下方時的相位
+var PRESS_PHASE = 0;
+(function(){
+  var x = 19.5;
+  // 門型機架橫跨輸送帶（沿 Z 方向立柱），貨箱才能沿 X 穿過去
+  var g = root.node({ pos: [x, 0, BELT_Z] });
+  [-1, 1].forEach(function(s){
+    box(g, C.steelDark, [0, 0.25, s * 3.0], [5.0, 0.5, 1.8], null, { noShadow: true });
+    box(g, C.steelDark, [0, 4.9, s * 3.0], [3.4, 9.3, 1.3]);
+    box(g, C.hazard, [0, 1.0, s * 3.0], [3.6, 1.1, 1.5], null, { noShadow: true });
+    box(g, C.iron, [0, 5.4, s * 3.0], [3.7, 0.5, 1.5], null, { noShadow: true });
+  });
+  box(g, C.steel, [0, 10.1, 0], [4.2, 1.3, 8.2]);
+  box(g, C.steelDark, [0, 10.95, 0], [2.6, 0.6, 6.0], null, { noShadow: true });
+  box(g, C.panel, [0, 10.1, 4.15], [2.6, 0.8, 0.08], null, { noShadow: true });
+  box(g, C.amber, [0, 9.35, 4.12], [3.2, 0.16, 0.06], null, { noShadow: true });
+  // 四根導柱
+  [-1, 1].forEach(function(sx){
+    [-1, 1].forEach(function(sz){
+      cyl(g, C.steel, [sx * 1.5, 6.6, sz * 2.5], 0.19, 7.4);
+    });
+  });
+  // 下模座（貼在輸送帶兩側，不擋料流）
+  [-1, 1].forEach(function(s){
+    box(g, C.iron, [0, 1.65, s * 1.95], [3.0, 0.5, 0.5], null, { noShadow: true });
+  });
+  var ram = g.node({ pos: [0, 6.0, 0] });
+  box(ram, C.iron, [0, 0.95, 0], [3.6, 1.9, 4.8]);
+  box(ram, C.steelDark, [0, 1.95, 0], [2.4, 0.5, 3.6], null, { noShadow: true });
+  box(ram, C.brass, [0, -0.15, 0], [2.9, 0.5, 3.6]);
+  box(ram, C.amber, [0, 0.95, 2.45], [3.0, 0.22, 0.06], null, { noShadow: true });
+  cyl(ram, C.steel, [0, 2.9, 0], 0.42, 2.2, null, { noShadow: true });
+  press.node = g; press.ram = ram; press.x = x; press.hit = 0; press.hitAmt = 0;
+  PRESS_PHASE = fract((x - BELT_X0) / CRATE_GAP);
+})();
+
+/* --- 曲軸引擎（左側）：開放式機架，曲軸／連桿／活塞的運動全部看得見 --- */
+var engine = { pistons: [], crank: null, x: -26, z: 4, crankY: 3.4 };
+(function(){
+  // 整組沿 Z 排列（群組轉 90°），方便從場中央側看
+  var g = root.node({ pos: [engine.x, 0, engine.z], rot: [0, PI / 2, 0] });
+  var CY = engine.crankY, R = 1.15, rodLen = 3.6, topY = 10.2;
+  // 底座
+  box(g, C.steelDark, [0, 0.35, 0], [13, 0.7, 6.0], null, { noShadow: true });
+  box(g, C.iron, [0, 1.1, 0], [12, 0.8, 5.2]);
+  box(g, C.hazard, [0, 0.2, 3.1], [13, 0.4, 0.3], null, { noShadow: true });
+  // 主軸承座：做成一根根立柱而不是整面牆，才看得見裡面的曲軸
+  for (var bp = 0; bp < 4; bp++){
+    var bx = -5.4 + bp * 3.6;
+    [-1, 1].forEach(function(s){
+      box(g, C.iron, [bx, (CY + 0.4) / 2 + 0.9, s * 1.45], [1.0, CY + 0.4, 0.7]);
+      box(g, C.steelDark, [bx, CY, s * 1.45], [1.3, 0.9, 0.95]);
+      box(g, C.steel, [bx + s * 0.0, CY * 0.55, s * 2.35], [0.34, CY * 1.15, 0.34], [s * 0.42, 0, 0]);
+    });
+  }
+  // 曲軸主軸（沿群組 local X）
+  var crank = g.node({ pos: [0, CY, 0] });
+  engine.crank = crank;
+  crank.part(M_CYL, C.steel, [0, 0, 0], [0, 0, PI/2], [0.5, 12.4, 0.5]);
+  var nCyl = 3;
+  for (var i = 0; i < nCyl; i++){
+    var cx = -3.6 + i * 3.6, ph = i * TAU / nCyl;
+    // 曲柄臂 + 曲柄銷（兩片臂夾住一根銷）
+    var web = crank.node({ pos: [cx, 0, 0], rot: [-ph, 0, 0] });
+    [-1, 1].forEach(function(s){
+      box(web, C.steel, [s * 0.62, R * 0.5, 0], [0.42, R * 1.9, 0.85]);
+    });
+    cyl(web, C.brass, [0, R, 0], 0.30, 1.5, [0, 0, PI/2]);
+    // 主軸承座
+    cyl(g, C.iron, [cx - 1.55, CY, 0], 0.55, 0.5, [0, 0, PI/2]);
+    // 開放式導柱（四根）＋頂板
+    [-1, 1].forEach(function(sx){
+      [-1, 1].forEach(function(sz){
+        cyl(g, C.steel, [cx + sx * 1.05, (CY + 2.0 + topY) / 2, sz * 1.05], 0.11, topY - CY - 2.0);
+      });
+    });
+    box(g, C.steelDark, [cx, topY, 0], [2.9, 0.45, 2.9]);
+    box(g, C.panel, [cx, topY + 0.3, 0], [1.4, 0.06, 1.4], null, { noShadow: true });
+    cyl(g, C.copper, [cx, topY + 0.75, 0], 0.17, 1.2);
+    // 活塞
+    var pis = g.node({ pos: [cx, CY + rodLen, 0] });
+    cyl(pis, C.brass, [0, 0, 0], 0.92, 1.25);
+    cyl(pis, C.steelDark, [0, 0.42, 0], 0.96, 0.14);
+    cyl(pis, C.steelDark, [0, 0.20, 0], 0.96, 0.12);
+    cyl(pis, C.steel, [0, 0.75, 0], 0.30, 0.5);
+    // 連桿：掛在活塞下、繞 local X 擺動；長度剛好等於 rodLen
+    var rod = pis.node({ pos: [0, 0, 0] });
+    box(rod, C.steel, [0, -rodLen * 0.5, 0], [0.32, rodLen, 0.46]);
+    box(rod, C.steel, [0, -rodLen * 0.5, 0], [0.5, rodLen * 0.55, 0.22]);
+    cyl(rod, C.brass, [0, -rodLen, 0], 0.26, 0.95, [0, 0, PI/2]);
+    engine.pistons.push({ node: pis, rod: rod, phase: ph, cx: cx, R: R, rodLen: rodLen });
+  }
+  // 排氣總管（往北端延伸接到煙囪）
+  cyl(g, C.copper, [0, topY + 1.35, 0], 0.34, 13.6, [0, 0, PI/2]);
+  for (var ex = 0; ex < 3; ex++) cyl(g, C.copper, [-3.6 + ex * 3.6, topY + 0.95, 0], 0.22, 1.0);
+  // 飛輪端
+  var fw2 = crank.node({ pos: [6.5, 0, 0] });
+  fw2.part(M_CYL, C.iron, [0, 0, 0], [0, 0, PI/2], [2.8, 0.55, 2.8]);
+  fw2.part(M_TORUS, C.brass, [0, 0, 0], [0, 0, PI/2], [1.45, 1.45, 1.45]);
+  for (var k = 0; k < 6; k++){
+    var ka = k / 6 * TAU;
+    fw2.part(M_BOX, C.iron, [0, Math.cos(ka) * 0.9, Math.sin(ka) * 0.9], [ka, 0, 0], [0.6, 1.8, 0.28]);
+  }
+  // 煙囪（獨立放在世界座標，方便噴蒸汽；擺在引擎北端，不擋住機構）
+  var stackX = engine.x, stackZ = engine.z + 9.4;
+  cyl(root, C.steelDark, [stackX, 7.5, stackZ], 0.95, 15, null, { noShadow: true });
+  cyl(root, C.hazard, [stackX, 13.2, stackZ], 1.05, 1.2, null, { noShadow: true });
+  cyl(root, C.iron, [stackX, 1.0, stackZ], 1.5, 2.0, null, { noShadow: true });
+  engine.stack = [stackX, 15.2, stackZ];
+})();
+
+/* --- 渦輪風扇（背景兩具） --- */
+var fans = [];
+(function(){
+  var fanGeo = mesh('fanblade', function(){
+    var g3 = Geo(), mm = m4.create();
+    geoAdd(g3, cylGeo(0.6, 0.6, 0.9, 16, true, true), null);
+    for (var i = 0; i < 7; i++){
+      var a = i / 7 * TAU;
+      m4.compose(mm, [Math.cos(a) * 1.9, 0, Math.sin(a) * 1.9], [0, -a, 0.42], [1,1,1]);
+      geoAdd(g3, boxGeo(3.2, 0.12, 1.3), mm);
+    }
+    return g3;
+  });
+  [[-38, 11, -19.5], [40, 11, -19.5]].forEach(function(p){
+    var housing = root.node({ pos: p });
+    housing.part(M_TUBE, C.steelDark, [0, 0, -0.4], [PI/2, 0, 0], [8.4, 2.4, 8.4], { noShadow: true }).cast = false;
+    housing.part(M_TORUS, C.steel, [0, 0, 0.8], [0, 0, 0], [4.3, 4.3, 4.3], { noShadow: true }).cast = false;
+    var blade = housing.part(fanGeo, C.steel, [0, 0, 0], [PI/2, 0, 0], [1,1,1], { noShadow: true });
+    blade.cast = false;
+    for (var s = 0; s < 4; s++){
+      var a2 = s / 4 * TAU + 0.4;
+      housing.part(M_BOX, C.steelDark, [Math.cos(a2) * 2.4, Math.sin(a2) * 2.4, 0.3],
+                   [0, 0, a2], [4.6, 0.16, 0.16], { noShadow: true }).cast = false;
+    }
+    fans.push(blade);
+  });
+})();
+
+/* =====================================================================
+   舞台 + 跳舞機器人
+   ===================================================================== */
+var STAGE = [0, 0, 9.5], STAGE_R = 9.5;
+var stageRings = [], stageLamps = [], spotBeams = [], speakers = [];
+(function stage(){
+  var g = root.node({ pos: STAGE });
+  // 舞台平台
+  g.part(M_CYL, mat([0.09, 0.10, 0.14], { spec: 0.55, shin: 44 }), [0, 0.30, 0], [0,0,0],
+         [STAGE_R * 2, 0.6, STAGE_R * 2], { noShadow: true }).cast = false;
+  g.part(M_CYL, C.steelDark, [0, 0.10, 0], [0,0,0], [STAGE_R * 2.12, 0.2, STAGE_R * 2.12], { noShadow: true }).cast = false;
+  // 舞台環形霓虹
+  for (var r = 0; r < 3; r++){
+    g.part(M_TORUS, r === 1 ? C.magenta : C.cyan, [0, 0.62, 0], [0,0,0],
+           [STAGE_R - r * 2.4, 1.4, STAGE_R - r * 2.4], { noShadow: true }).cast = false;
+  }
+  // 地板脈衝環（隨節拍擴散）
+  for (var i = 0; i < 4; i++){
+    var ring = g.part(M_TORUS, mat([0,0,0], { emis: 1.0, emisCol: [0.4, 0.9, 1.0], alpha: 0.5, mode: 5, blend: 'add' }),
+                      [0, 0.66, 0], [0,0,0], [1,1,1], { noShadow: true });
+    ring.cast = false;
+    stageRings.push(ring);
+  }
+  // 舞台邊緣燈
+  for (var k = 0; k < 16; k++){
+    var a = k / 16 * TAU;
+    g.part(M_CYL, k % 2 ? C.cyan : C.magenta,
+           [Math.cos(a) * (STAGE_R - 0.55), 0.66, Math.sin(a) * (STAGE_R - 0.55)],
+           [0,0,0], [0.36, 0.14, 0.36], { noShadow: true }).cast = false;
+  }
+  // 桁架門架 + 四盞搖頭燈
+  var truss = g.node({ pos: [0, 0, 0] });
+  var TH = 12.5, TW = STAGE_R + 2.0;
+  [-1, 1].forEach(function(s){
+    box(truss, C.steelDark, [s * TW, TH / 2, -TW * 0.5], [0.5, TH, 0.5], null, { noShadow: true }).cast = false;
+    box(truss, C.steelDark, [s * TW, TH / 2, TW * 0.5], [0.5, TH, 0.5], null, { noShadow: true }).cast = false;
+    box(truss, C.steelDark, [s * TW, TH, 0], [0.4, 0.4, TW], null, { noShadow: true }).cast = false;
+  });
+  box(truss, C.steelDark, [0, TH, -TW * 0.5], [TW * 2, 0.45, 0.45], null, { noShadow: true }).cast = false;
+  box(truss, C.steelDark, [0, TH, TW * 0.5], [TW * 2, 0.45, 0.45], null, { noShadow: true }).cast = false;
+  var lampCols = [C.magenta, C.cyan, C.lime, C.amber];
+  var lampRGB = [[1.0, 0.28, 0.75], [0.30, 0.85, 1.0], [0.55, 1.0, 0.40], [1.0, 0.65, 0.20]];
+  for (var L = 0; L < 4; L++){
+    var lx = (L < 2 ? -1 : 1) * (TW - 3.0), lz = (L % 2 ? 1 : -1) * TW * 0.5;
+    var yoke = truss.node({ pos: [lx, TH - 0.6, lz] });
+    box(yoke, C.steelDark, [0, 0.25, 0], [0.7, 0.5, 0.7], null, { noShadow: true }).cast = false;
+    var head = yoke.node({ pos: [0, -0.3, 0] });
+    box(head, C.iron, [0, 0, 0], [0.9, 0.9, 1.2], null, { noShadow: true }).cast = false;
+    head.part(M_CYL, lampCols[L], [0, -0.55, 0], [0,0,0], [0.55, 0.35, 0.55], { noShadow: true }).cast = false;
+    var beam = head.part(M_CONE, mat([0,0,0], { emis: 0.7, emisCol: lampRGB[L], alpha: 0.105, mode: 5, blend: 'add' }),
+                         [0, -5.8, 0], [0,0,0], [3.0, 11.0, 3.0], { noShadow: true });
+    beam.cast = false;
+    stageLamps.push({ yoke: yoke, head: head, beam: beam, rgb: lampRGB[L], i: L,
+                      home: [STAGE[0] + lx, TH - 1.2, STAGE[2] + lz] });
+    spotBeams.push(beam);
+  }
+  // 音箱（低音單體隨節拍鼓動）
+  [-1, 1].forEach(function(s){
+    var sp = g.node({ pos: [s * (STAGE_R - 1.2), 0.6, -STAGE_R * 0.62] });
+    box(sp, mat([0.07, 0.075, 0.09], { spec: 0.3, shin: 20 }), [0, 1.7, 0], [2.6, 3.4, 1.8]);
+    box(sp, C.steelDark, [0, 3.45, 0], [2.8, 0.2, 2.0]);
+    var woofer = sp.node({ pos: [0, 1.1, 0.92] });
+    woofer.part(M_CYL, C.rubber, [0, 0, 0], [PI/2, 0, 0], [1.9, 0.22, 1.9], { noShadow: true });
+    woofer.part(M_CYL, C.steel, [0, 0, 0.1], [PI/2, 0, 0], [0.7, 0.3, 0.7], { noShadow: true });
+    var tweeter = sp.node({ pos: [0, 2.7, 0.92] });
+    tweeter.part(M_CYL, C.cyan, [0, 0, 0], [PI/2, 0, 0], [0.7, 0.2, 0.7], { noShadow: true });
+    speakers.push({ woofer: woofer, tweeter: tweeter });
+  });
+})();
+
+/* --- DJ 機台 --- */
+var dj = {};
+(function(){
+  var g = root.node({ pos: [STAGE[0], 0, STAGE[2] - STAGE_R * 0.72] });
+  box(g, C.steelDark, [0, 0.9, 0], [5.4, 1.2, 2.2]);
+  box(g, mat([0.06, 0.09, 0.13], { spec: 0.5, shin: 30 }), [0, 1.6, 0], [5.8, 0.24, 2.6], [0.16, 0, 0]);
+  box(g, C.panel, [0, 1.72, 0.35], [2.0, 0.1, 1.2], [0.16, 0, 0], { noShadow: true });
+  var d1 = g.node({ pos: [-1.75, 1.78, -0.05] });
+  d1.part(M_CYL, C.iron, [0, 0, 0], [0.16, 0, 0], [1.5, 0.12, 1.5], { noShadow: true });
+  d1.part(M_CYL, C.magenta, [0, 0.07, 0], [0.16, 0, 0], [0.4, 0.06, 0.4], { noShadow: true });
+  var d2 = g.node({ pos: [1.75, 1.78, -0.05] });
+  d2.part(M_CYL, C.iron, [0, 0, 0], [0.16, 0, 0], [1.5, 0.12, 1.5], { noShadow: true });
+  d2.part(M_CYL, C.cyan, [0, 0.07, 0], [0.16, 0, 0], [0.4, 0.06, 0.4], { noShadow: true });
+  // 等化器燈條
+  var bars = [];
+  for (var i = 0; i < 9; i++){
+    var b = box(g, i % 3 === 0 ? C.magenta : C.cyan, [-1.6 + i * 0.4, 2.0, -0.9], [0.24, 1, 0.12], null, { noShadow: true });
+    b.cast = false;
+    bars.push(b);
+  }
+  dj.d1 = d1; dj.d2 = d2; dj.bars = bars; dj.pos = [STAGE[0], 0, STAGE[2] - STAGE_R * 0.72];
+})();
+
+/* --- 機器人（人形，可跳舞） --- */
+function buildRobot(opt){
+  var col = opt.color, accent = opt.accent;
+  var R = { phase: opt.phase || 0, home: opt.pos.slice(), scale: opt.scale || 1 };
+  var root0 = root.node({ pos: opt.pos.slice(), rot: [0, opt.yaw || 0, 0],
+                          scl: [R.scale, R.scale, R.scale] });
+  R.root = root0;
+  var pelvis = root0.node({ pos: [0, 1.06, 0] });
+  R.pelvis = pelvis;
+  box(pelvis, col, [0, 0, 0], [0.62, 0.34, 0.40]);
+  box(pelvis, C.joint, [0, -0.18, 0], [0.50, 0.14, 0.36]);
+
+  var torso = pelvis.node({ pos: [0, 0.24, 0] });
+  R.torso = torso;
+  box(torso, col, [0, 0.30, 0], [0.76, 0.66, 0.44]);
+  box(torso, C.joint, [0, -0.02, 0], [0.34, 0.22, 0.30]);
+  box(torso, accent, [0, 0.34, 0.235], [0.30, 0.30, 0.03], null, { noShadow: true });
+  box(torso, C.steelDark, [0, 0.60, 0], [0.86, 0.14, 0.46]);
+  // 背包
+  box(torso, C.steelDark, [0, 0.30, -0.26], [0.46, 0.44, 0.14]);
+  box(torso, accent, [0, 0.30, -0.335], [0.16, 0.28, 0.03], null, { noShadow: true });
+
+  var neck = torso.node({ pos: [0, 0.70, 0] });
+  R.neck = neck;
+  cyl(neck, C.joint, [0, 0.03, 0], 0.10, 0.14);
+  var head = neck.node({ pos: [0, 0.28, 0] });
+  R.head = head;
+  box(head, col, [0, 0, 0], [0.44, 0.42, 0.42]);
+  box(head, mat([0.02, 0.03, 0.05], { spec: 0.9, shin: 90 }), [0, 0.02, 0.215], [0.36, 0.18, 0.03], null, { noShadow: true });
+  box(head, accent, [0, 0.02, 0.228], [0.30, 0.10, 0.02], null, { noShadow: true });
+  box(head, C.steelDark, [0, 0.23, 0], [0.46, 0.06, 0.44], null, { noShadow: true });
+  // 耳罩 + 天線
+  cyl(head, C.joint, [0.24, 0.0, 0], 0.09, 0.10, [0, 0, PI/2]);
+  cyl(head, C.joint, [-0.24, 0.0, 0], 0.09, 0.10, [0, 0, PI/2]);
+  var ant = head.node({ pos: [0.13, 0.26, 0], rot: [0, 0, -0.22] });
+  R.ant = ant;
+  cyl(ant, C.steel, [0, 0.17, 0], 0.022, 0.34, null, { noShadow: true });
+  ant.part(M_SPH_LO, accent, [0, 0.35, 0], [0,0,0], [0.10, 0.10, 0.10], { noShadow: true });
+
+  function limb(parent, px, py, pz, len, rad, hand){
+    var j = parent.node({ pos: [px, py, pz] });
+    j.part(M_SPH_LO, C.joint, [0,0,0], [0,0,0], [rad * 2.5, rad * 2.5, rad * 2.5]);
+    cyl(j, col, [0, -len / 2, 0], rad, len);
+    cyl(j, C.joint, [0, -len * 0.5, 0], rad * 1.06, len * 0.22);
+    return j;
+  }
+  // 手臂
+  R.arms = [];
+  [-1, 1].forEach(function(s){
+    var sh = limb(torso, s * 0.46, 0.52, 0, 0.44, 0.105);
+    var el = limb(sh, 0, -0.44, 0, 0.42, 0.093);
+    var hand = el.node({ pos: [0, -0.46, 0] });
+    box(hand, col, [0, -0.06, 0], [0.17, 0.20, 0.13]);
+    box(hand, C.joint, [0, -0.18, 0.03], [0.13, 0.10, 0.16]);
+    R.arms.push({ sh: sh, el: el, hand: hand, side: s });
+  });
+  // 腿
+  R.legs = [];
+  [-1, 1].forEach(function(s){
+    var hip = limb(pelvis, s * 0.20, -0.16, 0, 0.52, 0.125);
+    var knee = limb(hip, 0, -0.52, 0, 0.50, 0.105);
+    var foot = knee.node({ pos: [0, -0.52, 0] });
+    box(foot, C.steelDark, [0, -0.06, 0.07], [0.24, 0.13, 0.42]);
+    box(foot, accent, [0, -0.02, 0.26], [0.16, 0.04, 0.04], null, { noShadow: true });
+    R.legs.push({ hip: hip, knee: knee, foot: foot, side: s });
+  });
+  return R;
+}
+
+var robots = [];
+(function(){
+  var pal = [
+    { color: C.bodyA, accent: C.cyan,    pos: [STAGE[0] - 4.2, 0.6, STAGE[2] + 1.2], yaw: 0.30, phase: 0.00, scale: 1.0 },
+    { color: C.bodyC, accent: C.magenta, pos: [STAGE[0] + 0.2, 0.6, STAGE[2] + 3.0], yaw: -0.05, phase: 0.50, scale: 1.12 },
+    { color: C.bodyB, accent: C.cyan,    pos: [STAGE[0] + 4.4, 0.6, STAGE[2] + 1.0], yaw: -0.32, phase: 0.25, scale: 0.94 },
+    { color: C.bodyD, accent: C.amber,   pos: [STAGE[0] - 1.9, 0.6, STAGE[2] + 5.6], yaw: 0.12, phase: 0.75, scale: 0.86 },
+    { color: C.bodyA, accent: C.lime,    pos: [STAGE[0] + 2.4, 0.6, STAGE[2] + 5.8], yaw: -0.18, phase: 0.62, scale: 0.90 }
+  ];
+  for (var i = 0; i < pal.length; i++) robots.push(buildRobot(pal[i]));
+  // DJ 機器人：站在機台後方
+  var d = buildRobot({ color: C.bodyD, accent: C.magenta,
+                       pos: [dj.pos[0], 0.6, dj.pos[2] - 1.6], yaw: PI, phase: 0.33, scale: 1.05 });
+  d.isDJ = true;
+  robots.push(d);
+  dj.robot = d;
+})();
+
+/* --- 圍觀的小機器人（在廠區地面上點頭） --- */
+var bystanders = [];
+(function(){
+  var spots = [[-16, 0, 14], [16.5, 0, 15.5], [-22, 0, 2.5], [24, 0, 4.0]];
+  var cols = [C.bodyB, C.bodyC, C.bodyA, C.bodyD];
+  for (var i = 0; i < spots.length; i++){
+    var r = buildRobot({ color: cols[i], accent: i % 2 ? C.cyan : C.amber,
+                         pos: spots[i], yaw: Math.atan2(STAGE[0] - spots[i][0], STAGE[2] - spots[i][2]),
+                         phase: i * 0.31, scale: 0.92 });
+    r.bystander = true;
+    bystanders.push(r);
+  }
+})();
+
+/* =====================================================================
+   粒子：焊接火花 / 沖壓火星 / 蒸汽
+   ===================================================================== */
+var sparks = [], SPARK_N = 150;
+for (var si = 0; si < SPARK_N; si++) sparks.push({ life: 0, p: [0,0,0], v: [0,0,0], s: 1, col: [1, 0.75, 0.3] });
+function emitSpark(x, y, z, n, spread, col, speed){
+  for (var i = 0, c = 0; i < SPARK_N && c < n; i++){
+    var s = sparks[i];
+    if (s.life > 0) continue;
+    c++;
+    s.life = 0.35 + Math.random() * 0.5;
+    s.max = s.life;
+    s.p[0] = x; s.p[1] = y; s.p[2] = z;
+    var a = Math.random() * TAU, e = Math.random() * spread;
+    var sp = (speed || 4) * (0.4 + Math.random());
+    s.v[0] = Math.cos(a) * Math.sin(e) * sp;
+    s.v[1] = Math.cos(e) * sp * (0.5 + Math.random() * 0.9);
+    s.v[2] = Math.sin(a) * Math.sin(e) * sp;
+    s.s = 0.05 + Math.random() * 0.07;
+    s.col = col || [1.0, 0.72, 0.28];
+  }
+}
+var steam = [], STEAM_N = 46;
+for (var vi = 0; vi < STEAM_N; vi++) steam.push({ life: 0, p: [0,0,0], v: [0,0,0], s: 1, rot: 0 });
+function emitSteam(x, y, z, n, up, spread){
+  for (var i = 0, c = 0; i < STEAM_N && c < n; i++){
+    var s = steam[i];
+    if (s.life > 0) continue;
+    c++;
+    s.life = 2.4 + Math.random() * 1.8;
+    s.max = s.life;
+    s.p[0] = x + (Math.random() - 0.5) * 0.5;
+    s.p[1] = y; s.p[2] = z + (Math.random() - 0.5) * 0.5;
+    s.v[0] = (Math.random() - 0.5) * (spread || 0.5);
+    s.v[1] = (up || 1.6) * (0.7 + Math.random() * 0.6);
+    s.v[2] = (Math.random() - 0.5) * (spread || 0.5);
+    s.s = 0.8 + Math.random() * 0.8;
+  }
+}
+
+/* =====================================================================
+   相機
+   ===================================================================== */
+var cam = {
+  target: [0, 3.2, 2],
+  yaw: 0.55, pitch: 0.30, dist: 44,
+  eye: [0, 0, 0],
+  mode: 0,          // 0 自動 1 舞台 2 產線 3 齒輪 4 引擎  (5 = 使用者自由)
+  tYaw: 0.55, tPitch: 0.30, tDist: 44, tTarget: [0, 3.2, 2],
+  shake: 0
+};
+var SHOTS = [
+  { name: '全廠俯瞰', desc: '產線 · 舞台 · 齒輪牆', target: [0, 4.2, -1], yaw: 0.34, pitch: 0.245, dist: 52, dur: 11 },
+  { name: '舞台特寫', desc: '節拍同步的機器人舞群', target: [STAGE[0], 2.5, STAGE[2] + 1.6], yaw: 0.06, pitch: 0.10, dist: 17, dur: 10 },
+  { name: '齒輪牆',   desc: '六段齒輪組嚙合傳動', target: [0, 7.4, -19], yaw: -0.10, pitch: 0.06, dist: 24, dur: 9 },
+  { name: '輸送產線', desc: '焊接機械臂即時作業', target: [11, 2.4, -11.0], yaw: -1.25, pitch: 0.12, dist: 23, dur: 10 },
+  { name: '曲軸引擎', desc: '三缸曲柄滑塊往復運轉', target: [-25.5, 5.2, 3], yaw: -1.30, pitch: 0.13, dist: 25, dur: 9 },
+  { name: '沖壓工站', desc: '落錘與貨箱同步咬合', target: [19.5, 3.4, -8.5], yaw: 1.20, pitch: 0.15, dist: 19, dur: 8 },
+  { name: '舞台環繞', desc: '低角度環繞鏡位', target: [STAGE[0], 2.2, STAGE[2] + 1.0], yaw: 0, pitch: 0.04, dist: 15, dur: 12, orbit: 0.9 }
+];
+var PRESETS = {
+  1: { target: [STAGE[0], 2.5, STAGE[2] + 1.6], yaw: 0.05, pitch: 0.11, dist: 17 },
+  2: { target: [11, 2.4, -11.0], yaw: -1.25, pitch: 0.13, dist: 23 },
+  3: { target: [0, 7.4, -19], yaw: -0.10, pitch: 0.07, dist: 24 },
+  4: { target: [-25.5, 5.2, 3], yaw: -1.30, pitch: 0.14, dist: 25 }
+};
+var shotIdx = 0, shotT = 0;
+
+/* 互動 */
+var drag = null;
+canvas.addEventListener('pointerdown', function(e){
+  drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add('drag');
+  hintFade();
+});
+canvas.addEventListener('pointermove', function(e){
+  if (!drag) return;
+  var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  cam.mode = 5;
+  setCamButtons(-1);
+  cam.tYaw = cam.yaw = cam.yaw - dx * 0.005;
+  cam.tPitch = cam.pitch = clamp(cam.pitch + dy * 0.004, -0.12, 1.25);
+  setCap('自由視角', '拖曳 / 滾輪 自行取景');
+});
+function endDrag(){ drag = null; canvas.classList.remove('drag'); }
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('wheel', function(e){
+  e.preventDefault();
+  cam.tDist = cam.dist = clamp(cam.dist * (1 + Math.sign(e.deltaY) * 0.09), 8, 110);
+  if (cam.mode === 0) { cam.mode = 5; setCamButtons(-1); setCap('自由視角', '拖曳 / 滾輪 自行取景'); }
+  hintFade();
+}, { passive: false });
+// 雙指縮放
+var pinch = null;
+canvas.addEventListener('touchstart', function(e){
+  if (e.touches.length === 2){
+    pinch = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  }
+}, { passive: true });
+canvas.addEventListener('touchmove', function(e){
+  if (e.touches.length === 2 && pinch){
+    var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    cam.tDist = cam.dist = clamp(cam.dist * (pinch / d), 8, 110);
+    pinch = d;
+    cam.mode = 5; setCamButtons(-1);
+  }
+}, { passive: true });
+canvas.addEventListener('touchend', function(){ pinch = null; }, { passive: true });
+
+/* =====================================================================
+   UI
+   ===================================================================== */
+var running = true, speed = 1, discoOn = true, shadowOn = true, wireOn = false;
+var elFps = document.getElementById('sFps'), elDraw = document.getElementById('sDraw'),
+    elLine = document.getElementById('sLine'), elRpm = document.getElementById('sRpm'),
+    elBpm = document.getElementById('sBpm'), elCap = document.getElementById('cap'),
+    elHint = document.getElementById('hint');
+
+var camBtns = [].slice.call(document.querySelectorAll('[data-cam]'));
+function setCamButtons(idx){ camBtns.forEach(function(b, i){ b.classList.toggle('on', i === idx); }); }
+camBtns.forEach(function(b, i){
+  b.addEventListener('click', function(){
+    setCamButtons(i);
+    cam.mode = i;
+    if (i === 0){ shotT = 0; shotIdx = 0; applyShot(SHOTS[0], true); setCap(SHOTS[0].name, SHOTS[0].desc); }
+    else {
+      var p = PRESETS[i];
+      cam.tTarget = p.target.slice(); cam.tYaw = p.yaw; cam.tPitch = p.pitch; cam.tDist = p.dist;
+      setCap(b.textContent, ['', '節拍同步的機器人舞群', '焊接機械臂即時作業', '六段減速齒輪組嚙合中', '三缸活塞往復運轉'][i]);
+    }
+    hintFade();
+  });
+});
+var bPlay = document.getElementById('bPlay');
+bPlay.addEventListener('click', function(){
+  running = !running;
+  bPlay.textContent = running ? '暫停' : '播放';
+  bPlay.classList.toggle('on', running);
+});
+var speeds = [0.5, 1, 2], spIdx = 1, bSpeed = document.getElementById('bSpeed');
+bSpeed.addEventListener('click', function(){
+  spIdx = (spIdx + 1) % speeds.length;
+  speed = speeds[spIdx];
+  bSpeed.textContent = '速度 ×' + speed;
+  bSpeed.classList.toggle('on', speed !== 1);
+});
+var bDisco = document.getElementById('bDisco');
+bDisco.addEventListener('click', function(){ discoOn = !discoOn; bDisco.classList.toggle('on', discoOn); });
+var bShadow = document.getElementById('bShadow');
+bShadow.addEventListener('click', function(){ shadowOn = !shadowOn; autoShadow = true; lowFrames = 0; bShadow.classList.toggle('on', shadowOn); });
+var bWire = document.getElementById('bWire');
+bWire.addEventListener('click', function(){ wireOn = !wireOn; bWire.classList.toggle('on', wireOn); });
+
+window.addEventListener('keydown', function(e){
+  if (e.code === 'Space'){ e.preventDefault(); bPlay.click(); }
+  else if (e.key >= '1' && e.key <= '5'){ var n = +e.key - 1; if (camBtns[n]) camBtns[n].click(); }
+  else if (e.key === 'w' || e.key === 'W') bWire.click();
+});
+var capTimer = 0;
+function setCap(title, desc){
+  elCap.innerHTML = '<b>' + title + '</b>' + desc;
+  elCap.style.opacity = 1;
+  capTimer = 4.2;
+}
+function hintFade(){ elHint.style.opacity = 0; }
+setTimeout(hintFade, 9000);
+
+/* =====================================================================
+   動畫更新
+   ===================================================================== */
+var BPM = 120, BEAT = 60 / BPM;
+var T = 0;              // 模擬時間（受速度影響）
+var beat = 0, beatIdx = 0, beatPulse = 0;
+
+// 舞步：每 8 拍換一種
+function danceMove(idx){ return idx % 6; }
+
+function poseRobot(R, t, b, moveRaw, energy){
+  var ph = R.phase;
+  var bb = b + ph * 2;                 // 個別相位偏移（造成卡農效果）
+  var move = moveRaw;
+  var A = R.arms, L = R.legs;
+  var bounce = 0, twist = 0, lean = 0, headY = 0, headX = 0;
+  var s0 = A[0], s1 = A[1];            // side -1, +1
+  var l0 = L[0], l1 = L[1];
+
+  // 預設回中
+  for (var i = 0; i < 2; i++){
+    A[i].sh.rot[0] = 0; A[i].sh.rot[1] = 0; A[i].sh.rot[2] = 0;
+    A[i].el.rot[0] = 0; A[i].el.rot[2] = 0;
+    L[i].hip.rot[0] = 0; L[i].hip.rot[2] = 0;
+    L[i].knee.rot[0] = 0;
+    L[i].foot.rot[0] = 0;
+  }
+  R.root.pos[1] = R.home[1];
+  R.root.rot[1] = R.baseYaw !== undefined ? R.baseYaw : R.root.rot[1];
+
+  var half = Math.sin(bb * PI);        // 每拍一次的擺動
+  var quarter = Math.sin(bb * PI * 0.5);
+  var kick = pulse(bb * 0.5, 0.42);    // 每兩拍一次的重音
+
+  if (move === 0){
+    /* 機械舞：手臂直角切換 + 身體 pop */
+    var st = Math.floor(bb) % 4;
+    var f = fract(bb);
+    var ease = smoothstep(0, 0.28, f);
+    var seqA = [[-1.5, -1.4], [-0.2, -1.9], [-2.6, -0.5], [-0.9, -1.6]];
+    var prev = seqA[(st + 3) % 4], cur = seqA[st];
+    A[0].sh.rot[0] = lerp(prev[0], cur[0], ease);
+    A[1].sh.rot[0] = lerp(prev[1], cur[1], ease);
+    A[0].sh.rot[2] = lerp(0.5, 1.15, ease) * -1;
+    A[1].sh.rot[2] = lerp(0.5, 1.15, ease);
+    A[0].el.rot[0] = -1.55; A[1].el.rot[0] = -1.55;
+    twist = (st % 2 ? 0.30 : -0.30) * ease + (st % 2 ? -0.30 : 0.30) * (1 - ease);
+    bounce = -0.05 * kick;
+    headY = twist * 0.6;
+    L[0].hip.rot[0] = 0.12 * half; L[1].hip.rot[0] = -0.12 * half;
+    L[0].knee.rot[0] = 0.20 + 0.1 * kick; L[1].knee.rot[0] = 0.20 + 0.1 * kick;
+  } else if (move === 1){
+    /* 波浪手：手臂大幅擺動 + 扭腰 */
+    var w = Math.sin(bb * PI);
+    A[0].sh.rot[0] = -2.4 + 0.9 * w;
+    A[1].sh.rot[0] = -0.6 - 0.9 * w;
+    A[0].sh.rot[2] = -0.85 - 0.35 * w;
+    A[1].sh.rot[2] = 0.85 - 0.35 * w;
+    A[0].el.rot[0] = -0.9 - 0.7 * Math.sin(bb * PI + 0.9);
+    A[1].el.rot[0] = -0.9 + 0.7 * Math.sin(bb * PI + 0.9);
+    twist = 0.34 * Math.sin(bb * PI * 0.5);
+    lean = 0.10 * w;
+    bounce = -0.10 * Math.abs(w);
+    headY = -twist * 0.7; headX = 0.10 * w;
+    L[0].hip.rot[0] = 0.22 * w; L[1].hip.rot[0] = -0.22 * w;
+    L[0].knee.rot[0] = 0.18 + 0.22 * Math.max(0, w);
+    L[1].knee.rot[0] = 0.18 + 0.22 * Math.max(0, -w);
+  } else if (move === 2){
+    /* 跳躍轉身：每兩拍一跳，空中轉 180° */
+    var cyc = bb * 0.5, f2 = fract(cyc), air = Math.sin(clamp(f2 / 0.55, 0, 1) * PI);
+    bounce = air * 0.85;
+    R.spin = (R.spin === undefined) ? 0 : R.spin;
+    twist = 0;
+    R.root.rot[1] = (R.baseYaw || 0) + Math.floor(cyc) * PI + smoothstep(0, 0.55, f2) * PI;
+    var tuck = air;
+    A[0].sh.rot[0] = -2.7 * tuck - 0.3; A[1].sh.rot[0] = -2.7 * tuck - 0.3;
+    A[0].sh.rot[2] = -0.4 - 0.5 * tuck; A[1].sh.rot[2] = 0.4 + 0.5 * tuck;
+    A[0].el.rot[0] = -0.5 - 0.9 * tuck; A[1].el.rot[0] = -0.5 - 0.9 * tuck;
+    L[0].hip.rot[0] = -0.9 * tuck; L[1].hip.rot[0] = -0.9 * tuck;
+    L[0].knee.rot[0] = 1.5 * tuck; L[1].knee.rot[0] = 1.5 * tuck;
+    headX = -0.2 * tuck;
+  } else if (move === 3){
+    /* Disco 指天：單手斜上、對角切換 */
+    var st2 = Math.floor(bb * 0.5) % 2, f3 = fract(bb * 0.5), e3 = smoothstep(0, 0.3, f3);
+    var up = st2 ? e3 : 1 - e3;
+    A[0].sh.rot[0] = lerp(-0.5, -2.75, up);
+    A[0].sh.rot[2] = lerp(-0.35, -0.75, up);
+    A[0].el.rot[0] = lerp(-1.4, -0.12, up);
+    A[1].sh.rot[0] = lerp(-2.75, -0.5, up);
+    A[1].sh.rot[2] = lerp(0.75, 0.35, up);
+    A[1].el.rot[0] = lerp(-0.12, -1.4, up);
+    twist = lerp(0.22, -0.22, up);
+    bounce = -0.07 * (0.5 + 0.5 * Math.cos(bb * PI * 2));
+    headY = twist; headX = -0.16 * Math.abs(Math.sin(bb * PI));
+    L[0].hip.rot[0] = 0.18 * Math.sin(bb * PI); L[1].hip.rot[0] = -0.18 * Math.sin(bb * PI);
+    L[0].knee.rot[0] = 0.24; L[1].knee.rot[0] = 0.24;
+  } else if (move === 4){
+    /* 側併步 + 拍手 */
+    var sw = Math.sin(bb * PI * 0.5);
+    var clap = Math.abs(Math.sin(bb * PI));
+    A[0].sh.rot[0] = -1.5; A[1].sh.rot[0] = -1.5;
+    A[0].sh.rot[2] = -0.55 + 0.42 * clap; A[1].sh.rot[2] = 0.55 - 0.42 * clap;
+    A[0].el.rot[0] = -1.05; A[1].el.rot[0] = -1.05;
+    A[0].el.rot[2] = 0.3 * clap; A[1].el.rot[2] = -0.3 * clap;
+    R.root.pos[0] = R.home[0] + sw * 0.55;
+    twist = -sw * 0.16;
+    bounce = -0.06 * clap;
+    var lift = Math.max(0, Math.sin(bb * PI));
+    L[0].hip.rot[0] = -0.45 * lift * (sw > 0 ? 1 : 0);
+    L[1].hip.rot[0] = -0.45 * lift * (sw < 0 ? 1 : 0);
+    L[0].knee.rot[0] = 0.9 * lift * (sw > 0 ? 1 : 0) + 0.12;
+    L[1].knee.rot[0] = 0.9 * lift * (sw < 0 ? 1 : 0) + 0.12;
+    headY = -twist;
+  } else {
+    /* 抽腿踢步 + 甩頭 */
+    var st3 = Math.floor(bb) % 2, f4 = fract(bb);
+    var e4 = Math.sin(f4 * PI);
+    var sgn = st3 ? 1 : -1;
+    L[st3].hip.rot[0] = -0.85 * e4;
+    L[st3].knee.rot[0] = 0.35 * (1 - e4) + 0.15;
+    L[1 - st3].knee.rot[0] = 0.30;
+    A[0].sh.rot[0] = -1.2 - 0.9 * e4 * (sgn > 0 ? 1 : 0.2);
+    A[1].sh.rot[0] = -1.2 - 0.9 * e4 * (sgn < 0 ? 1 : 0.2);
+    A[0].sh.rot[2] = -0.9 - 0.3 * e4; A[1].sh.rot[2] = 0.9 + 0.3 * e4;
+    A[0].el.rot[0] = -1.2; A[1].el.rot[0] = -1.2;
+    twist = 0.3 * sgn * e4;
+    bounce = 0.10 * e4;
+    headY = -0.4 * sgn * e4; headX = 0.14 * e4;
+  }
+
+  // 共通：呼吸式上下與軀幹扭轉
+  R.root.pos[1] = R.home[1] + bounce * energy;
+  if (move !== 4) R.root.pos[0] = R.home[0];
+  R.pelvis.rot[1] = twist * 0.5 * energy;
+  R.torso.rot[1] = twist * 0.5 * energy;
+  R.torso.rot[0] = lean * energy;
+  R.head.rot[1] = headY * energy;
+  R.head.rot[0] = headX * energy;
+  R.ant.rot[2] = -0.22 + Math.sin(bb * PI * 2 + 1.0) * 0.45 * energy;
+}
+
+function updateRobots(dt){
+  var moveIdx = Math.floor(beat / 8);
+  var move = danceMove(moveIdx);
+  var trans = fract(beat / 8);
+  for (var i = 0; i < robots.length; i++){
+    var R = robots[i];
+    if (R.baseYaw === undefined) R.baseYaw = R.root.rot[1];
+    if (R.isDJ){
+      // DJ：手在唱盤上、身體隨拍點頭
+      var b2 = beat + R.phase * 2;
+      R.root.pos[1] = R.home[1] - 0.05 * Math.abs(Math.sin(b2 * PI));
+      R.torso.rot[0] = 0.18 + 0.10 * Math.sin(b2 * PI);
+      R.head.rot[0] = 0.20 * Math.sin(b2 * PI) - 0.05;
+      R.head.rot[1] = 0.35 * Math.sin(b2 * PI * 0.25);
+      R.arms[0].sh.rot[0] = -1.15 + 0.30 * Math.sin(b2 * PI);
+      R.arms[1].sh.rot[0] = -1.15 - 0.30 * Math.sin(b2 * PI);
+      R.arms[0].sh.rot[2] = -0.62; R.arms[1].sh.rot[2] = 0.62;
+      R.arms[0].el.rot[0] = -0.55 - 0.25 * Math.sin(b2 * PI + 1);
+      R.arms[1].el.rot[0] = -0.55 + 0.25 * Math.sin(b2 * PI + 1);
+      R.legs[0].knee.rot[0] = 0.18; R.legs[1].knee.rot[0] = 0.18;
+      R.ant.rot[2] = -0.22 + Math.sin(b2 * PI * 2) * 0.5;
+      continue;
+    }
+    // 換舞步時做一個短暫的能量下降，看起來像「收招再出招」
+    var energy = 0.55 + 0.45 * smoothstep(0, 0.10, trans);
+    poseRobot(R, T, beat, (R.phase > 0.6 && move === 2) ? 1 : move, energy);
+  }
+  // 圍觀機器人：點頭 + 舉手歡呼
+  for (var j = 0; j < bystanders.length; j++){
+    var B = bystanders[j];
+    var b3 = beat + B.phase * 3;
+    var nod = Math.sin(b3 * PI);
+    B.root.pos[1] = B.home[1] + 0.10 * Math.max(0, nod);
+    B.head.rot[0] = 0.16 * nod;
+    B.torso.rot[1] = 0.14 * Math.sin(b3 * PI * 0.5);
+    var raise = (Math.floor(b3 / 4) % 2) ? 1 : 0.25;
+    B.arms[0].sh.rot[0] = -2.4 * raise - 0.2 + 0.25 * nod;
+    B.arms[1].sh.rot[0] = -2.4 * raise - 0.2 - 0.25 * nod;
+    B.arms[0].sh.rot[2] = -0.5; B.arms[1].sh.rot[2] = 0.5;
+    B.arms[0].el.rot[0] = -0.6 - 0.4 * nod;
+    B.arms[1].el.rot[0] = -0.6 + 0.4 * nod;
+    B.legs[0].knee.rot[0] = 0.16; B.legs[1].knee.rot[0] = 0.16;
+    B.ant.rot[2] = -0.22 + nod * 0.4;
+  }
+}
+
+// 二連桿 IK：把工具端送到 (tx,ty,tz)
+function solveArm(a, tx, ty, tz){
+  var dx = tx - a.x, dz = tz - a.z;
+  var yaw = Math.atan2(dx, dz);
+  a.yaw.rot[1] = yaw;
+  var r = Math.hypot(dx, dz);
+  var y = ty - a.shoulderY;
+  var D = Math.hypot(r, y);
+  var reach = a.L1 + a.L2 - 0.35;
+  if (D > reach){ var k = reach / D; r *= k; y *= k; D = reach; }
+  if (D < 1.2){ D = 1.2; }
+  var alpha = Math.atan2(y, r);
+  var cB = clamp((D*D + a.L1*a.L1 - a.L2*a.L2) / (2 * D * a.L1), -1, 1);
+  var B = Math.acos(cB);
+  var cC = clamp((a.L1*a.L1 + a.L2*a.L2 - D*D) / (2 * a.L1 * a.L2), -1, 1);
+  var Cc = Math.acos(cC);
+  // 節點的 +Y 為連桿指向；轉軸為局部 X
+  a.sh.rot[0] = -(alpha + B) + PI / 2;
+  a.el.rot[0] = PI - Cc;
+  a.wr.rot[0] = -(a.sh.rot[0] + a.el.rot[0]) - PI / 2 + 0.15;   // 工具維持朝下
+}
+
+function updateFactory(dt){
+  // 齒輪
+  var baseSpin = 0.55;
+  for (var i = 0; i < gears.length; i++){
+    var g = gears[i];
+    g.node.rot[1] = g.dir * g.speed * baseSpin * T + g.phase;
+  }
+  // 滾筒
+  var rollSpin = BELT_SPEED / 0.42 * T;
+  for (var r = 0; r < rollers.length; r++) rollers[r].rot[1] = rollSpin;
+  // 風扇
+  for (var f = 0; f < fans.length; f++) fans[f].rot[1] = T * (f ? -3.2 : 2.8);
+
+  // 貨箱沿 X 前進，循環
+  var travel = T * BELT_SPEED;
+  for (var c = 0; c < crates.length; c++){
+    var cr = crates[c];
+    var x = BELT_X0 + ((travel + cr.i * CRATE_GAP) % BELT_LEN + BELT_LEN) % BELT_LEN;
+    cr.x = x;
+    cr.node.pos[0] = x;
+    cr.node.rot[1] = 0;
+    // 通過沖壓機時被壓一下（縮扁）
+    var dToPress = Math.abs(x - press.x);
+    var squash = dToPress < 0.9 ? (1 - dToPress / 0.9) * press.hitAmt : 0;
+    cr.node.scl[1] = 1 - squash * 0.22;
+    cr.node.scl[0] = 1 + squash * 0.08;
+    cr.node.scl[2] = 1 + squash * 0.08;
+    cr.node.pos[1] = BELT_Y + 0.55 - squash * 0.10;
+  }
+
+  // 沖壓：把落錘相位對到「貨箱正好在錘下」的時刻
+  var pu = fract(travel / CRATE_GAP - PRESS_PHASE + 0.37);
+  // 落錘剛好在 pu = 0.37（貨箱正對錘心）觸底
+  var down = pu < 0.37 ? smoothstep(0.05, 0.37, pu) : (pu < 0.52 ? 1 : 1 - smoothstep(0.52, 0.80, pu));
+  press.ram.pos[1] = 6.0 - down * 2.85;
+  press.hitAmt = smoothstep(0.72, 1.0, down);
+  var wasHit = press.hit;
+  press.hit = down > 0.94 ? 1 : 0;
+  if (press.hit && !wasHit){
+    emitSpark(press.x, BELT_Y + 1.05, BELT_Z + 0.2, 26, 1.15, [1.0, 0.66, 0.22], 6.5);
+    emitSteam(press.x - 3.2, 3.2, BELT_Z - 2.2, 2, 1.2, 0.9);
+    cam.shake = 0.55;
+  }
+
+  // 焊接機械臂：追著最近的貨箱做焊接
+  for (var a = 0; a < arms.length; a++){
+    var arm = arms[a];
+    // 找到位於此臂作業窗（±4.2）內、最接近的貨箱
+    var best = null, bestD = 1e9;
+    for (var k = 0; k < crates.length; k++){
+      var d = Math.abs(crates[k].x - arm.x);
+      if (d < bestD){ bestD = d; best = crates[k]; }
+    }
+    var win = 3.4;
+    if (best && bestD < win){
+      var tx = best.x, tz = BELT_Z + 0.55, ty = BELT_Y + 1.18;
+      // 沿箱面小幅來回走焊道
+      var wob = Math.sin(T * 17) * 0.28;
+      solveArm(arm, tx + wob, ty + Math.abs(Math.sin(T * 9)) * 0.06, tz);
+      arm.weld = 1 - bestD / win;
+      if (Math.random() < 0.85){
+        var wp = weldPoint(arm);
+        emitSpark(wp[0], wp[1], wp[2], 3, 1.5, [1.0, 0.85, 0.45], 4.2);
+      }
+    } else {
+      // 待機：小幅巡弋
+      arm.weld = 0;
+      solveArm(arm, arm.x + Math.sin(T * 0.7 + a) * 2.2, 4.6 + Math.sin(T * 0.9 + a) * 0.5, arm.z + 3.0);
+    }
+    arm.tip.emisOverride = 0.5 + arm.weld * 2.6;
+  }
+
+  // 曲軸與活塞：標準曲柄滑塊運動學
+  var crankA = T * 3.4;
+  engine.crank.rot[0] = crankA;
+  for (var p = 0; p < engine.pistons.length; p++){
+    var P = engine.pistons[p];
+    var th = crankA - P.phase;
+    // 曲柄銷相對曲軸中心（群組局部座標，繞 X 轉 → 在 YZ 平面上）
+    var py = Math.sin(th) * P.R, pz = Math.cos(th) * P.R;
+    var lift = Math.sqrt(Math.max(0.01, P.rodLen * P.rodLen - pz * pz));
+    P.node.pos[1] = engine.crankY + py + lift;
+    // 連桿：局部 -Y 指向曲柄銷
+    P.rod.rot[0] = -Math.atan2(pz, lift);
+  }
+  emitSteam(engine.stack[0], engine.stack[1], engine.stack[2], Math.random() < 0.55 ? 1 : 0, 2.6, 0.7);
+
+  // DJ 唱盤與等化器
+  dj.d1.rot[1] = -T * 5.2;
+  dj.d2.rot[1] = T * 3.1 + Math.sin(T * 6) * 0.6;
+  for (var q = 0; q < dj.bars.length; q++){
+    var h = 0.25 + 0.75 * Math.abs(Math.sin(beat * PI + q * 0.9)) * (0.5 + 0.5 * Math.sin(T * (2 + q * 0.37)));
+    dj.bars[q].scl[1] = 0.2 + h * 1.4;
+    dj.bars[q].pos[1] = 2.0 + (0.2 + h * 1.4) * 0.5 - 0.1;
+  }
+  // 音箱鼓動
+  for (var sp = 0; sp < speakers.length; sp++){
+    var k2 = 1 + beatPulse * 0.16;
+    speakers[sp].woofer.scl[2] = k2;
+    speakers[sp].woofer.pos[2] = 0.92 + beatPulse * 0.07;
+    speakers[sp].tweeter.scl[2] = 1 + beatPulse * 0.08;
+  }
+  // 舞台脈衝環
+  for (var rr = 0; rr < stageRings.length; rr++){
+    var ph2 = fract(beat / 2 + rr / stageRings.length);
+    var sc = 0.8 + ph2 * (STAGE_R - 0.4);
+    stageRings[rr].scl[0] = stageRings[rr].scl[2] = sc;
+    stageRings[rr].scl[1] = 1 + ph2 * 2;
+    stageRings[rr].ringAlpha = (1 - ph2) * (discoOn ? 0.75 : 0.25);
+  }
+  // 搖頭燈
+  for (var L = 0; L < stageLamps.length; L++){
+    var lp = stageLamps[L];
+    var s2 = discoOn ? 1 : 0.15;
+    lp.yoke.rot[1] = Math.sin(T * (0.7 + L * 0.13) + L) * 0.9 * s2;
+    lp.head.rot[0] = 0.35 + Math.sin(T * (0.9 + L * 0.17) + L * 2) * 0.42 * s2;
+    lp.beam.visible = discoOn;
+  }
+}
+
+function weldPoint(arm){
+  // 由工具節點的世界矩陣取得焊尖位置
+  var out = [0,0,0];
+  m4.xformPoint(out, arm.tip.world, [0, -0.12, 0]);
+  return out;
+}
+
+function updateParticles(dt){
+  for (var i = 0; i < SPARK_N; i++){
+    var s = sparks[i];
+    if (s.life <= 0) continue;
+    s.life -= dt;
+    s.v[1] -= 15 * dt;
+    s.p[0] += s.v[0] * dt; s.p[1] += s.v[1] * dt; s.p[2] += s.v[2] * dt;
+    if (s.p[1] < 0.06){ s.p[1] = 0.06; s.v[1] *= -0.35; s.v[0] *= 0.6; s.v[2] *= 0.6; }
+  }
+  for (var j = 0; j < STEAM_N; j++){
+    var v = steam[j];
+    if (v.life <= 0) continue;
+    v.life -= dt;
+    v.v[1] *= (1 - dt * 0.25);
+    v.p[0] += v.v[0] * dt; v.p[1] += v.v[1] * dt; v.p[2] += v.v[2] * dt;
+    v.s += dt * 1.5;
+  }
+}
+
+/* =====================================================================
+   渲染
+   ===================================================================== */
+var proj = m4.create(), view = m4.create(), tmpM = m4.create(), shadowM = m4.create(), nMat = new Float32Array(9);
+var drawCount = 0, curBlend = null;
+
+function setBlend(mode){
+  if (curBlend === mode) return;
+  curBlend = mode;
+  if (mode === null){ gl.disable(gl.BLEND); gl.depthMask(true); }
+  else {
+    gl.enable(gl.BLEND);
+    gl.depthMask(false);
+    if (mode === 'add') gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  }
+}
+
+function applyMat(m, alphaOverride, emisOverride){
+  // alphaOverride / emisOverride 為 undefined 時沿用材質本身的值
+  gl.uniform3fv(U.uColor, m.color);
+  gl.uniform3fv(U.uEmisCol, m.emisCol);
+  gl.uniform1f(U.uEmis, emisOverride === undefined ? m.emis : emisOverride);
+  gl.uniform1f(U.uSpec, m.spec);
+  gl.uniform1f(U.uShin, m.shin);
+  gl.uniform1f(U.uAlpha, alphaOverride === undefined ? m.alpha : alphaOverride);
+  gl.uniform1f(U.uMode, m.mode);
+}
+
+function bindMesh(msh){
+  gl.bindBuffer(gl.ARRAY_BUFFER, msh.vb);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wireOn ? (msh.lines(), msh.lineIb) : msh.ib);
+}
+
+function drawMesh(n){
+  var m = n.mat;
+  if (!m) return;
+  setBlend(m.blend);
+  gl.uniformMatrix4fv(U.uModel, false, n.world);
+  m4.normal(nMat, n.world);
+  gl.uniformMatrix3fv(U.uNMat, false, nMat);
+  applyMat(m, n.ringAlpha, n.emisOverride);
+  bindMesh(n.mesh);
+  if (wireOn) gl.drawElements(gl.LINES, n.mesh.lineCount, n.mesh.type, 0);
+  else gl.drawElements(gl.TRIANGLES, n.mesh.count, n.mesh.type, 0);
+  drawCount++;
+}
+
+function traverse(n, parent){
+  if (!n.visible) return;
+  m4.compose(n.local, n.pos, n.rot, n.scl);
+  m4.mul(n.world, parent, n.local);
+  if (n.mesh && n.mat && !n.mat.blend) drawMesh(n);
+  else if (n.mesh && n.mat) transparentQueue.push(n);
+  for (var i = 0; i < n.children.length; i++) traverse(n.children[i], n.world);
+}
+var transparentQueue = [];
+
+// 平面投影陰影
+function drawShadows(){
+  gl.uniform1f(U.uShadowMode, 1);
+  setBlend('alpha');
+  gl.disable(gl.CULL_FACE);
+  gl.enable(gl.STENCIL_TEST);
+  gl.stencilFunc(gl.NOTEQUAL, 1, 0xff);
+  gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+  m4.shadow(shadowM, [-keyDir[0], -keyDir[1], -keyDir[2]], 0.02);
+  gl.uniform1f(U.uAlpha, 0.36);
+  for (var i = 0; i < ALL.length; i++){
+    var n = ALL[i];
+    if (!n.cast || !n.mesh || !n.visible || !n.mat || n.mat.blend) continue;
+    // 只投射地面附近的物件，避免高處結構把整個地板塗黑
+    if (n.world[13] > 9.5) continue;
+    m4.mul(tmpM, shadowM, n.world);
+    gl.uniformMatrix4fv(U.uModel, false, tmpM);
+    bindMesh(n.mesh);
+    if (wireOn) gl.drawElements(gl.LINES, n.mesh.lineCount, n.mesh.type, 0);
+    else gl.drawElements(gl.TRIANGLES, n.mesh.count, n.mesh.type, 0);
+    drawCount++;
+  }
+  gl.disable(gl.STENCIL_TEST);
+  gl.enable(gl.CULL_FACE);
+  gl.uniform1f(U.uShadowMode, 0);
+}
+
+// 粒子（直接用小網格畫）
+var partM = m4.create();
+function drawParticles(){
+  var sparkMat = mat([0,0,0], { emis: 1.0, emisCol: [1, 0.7, 0.3], alpha: 1, mode: 0, blend: 'add' });
+  setBlend('add');
+  bindMesh(M_BOX);
+  for (var i = 0; i < SPARK_N; i++){
+    var s = sparks[i];
+    if (s.life <= 0) continue;
+    var k = s.life / s.max;
+    var sc = s.s * (0.4 + k * 0.9);
+    m4.compose(partM, s.p, [0, 0, 0], [sc, sc * (1 + Math.min(2.5, Math.hypot(s.v[0], s.v[1], s.v[2]) * 0.09)), sc]);
+    gl.uniformMatrix4fv(U.uModel, false, partM);
+    m4.normal(nMat, partM);
+    gl.uniformMatrix3fv(U.uNMat, false, nMat);
+    gl.uniform3fv(U.uColor, [0, 0, 0]);
+    gl.uniform3fv(U.uEmisCol, s.col);
+    gl.uniform1f(U.uEmis, 1.1 * k + 0.35);
+    gl.uniform1f(U.uAlpha, clamp(k * 1.4, 0, 1));
+    gl.uniform1f(U.uMode, 0);
+    gl.drawElements(gl.TRIANGLES, M_BOX.count, M_BOX.type, 0);
+    drawCount++;
+  }
+  // 蒸汽：由遠至近排序後以一般混合繪製
+  var vis = [];
+  for (var j = 0; j < STEAM_N; j++){
+    var v = steam[j];
+    if (v.life <= 0) continue;
+    var dx = v.p[0] - cam.eye[0], dy = v.p[1] - cam.eye[1], dz = v.p[2] - cam.eye[2];
+    v.d = dx*dx + dy*dy + dz*dz;
+    vis.push(v);
+  }
+  vis.sort(function(a, b){ return b.d - a.d; });
+  setBlend('alpha');
+  bindMesh(M_SPH_LO);
+  for (var q = 0; q < vis.length; q++){
+    var w = vis[q];
+    var k2 = w.life / w.max;
+    m4.compose(partM, w.p, [0, w.p[0], 0], [w.s, w.s, w.s]);
+    gl.uniformMatrix4fv(U.uModel, false, partM);
+    m4.normal(nMat, partM);
+    gl.uniformMatrix3fv(U.uNMat, false, nMat);
+    gl.uniform3fv(U.uColor, [0.30, 0.36, 0.44]);
+    gl.uniform3fv(U.uEmisCol, [0.35, 0.45, 0.6]);
+    gl.uniform1f(U.uEmis, 0.25);
+    gl.uniform1f(U.uAlpha, clamp(k2, 0, 1) * 0.22);
+    gl.uniform1f(U.uMode, 0);
+    gl.drawElements(gl.TRIANGLES, M_SPH_LO.count, M_SPH_LO.type, 0);
+    drawCount++;
+  }
+}
+
+/* --- 尺寸 --- */
+var W = 1, H = 1, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(1, Math.floor(canvas.clientWidth * DPR));
+  H = Math.max(1, Math.floor(canvas.clientHeight * DPR));
+  if (canvas.width !== W || canvas.height !== H){ canvas.width = W; canvas.height = H; }
+}
+window.addEventListener('resize', resize);
+
+/* --- 相機更新 --- */
+function applyShot(s, instant){
+  cam.tTarget = s.target.slice();
+  cam.tYaw = s.yaw; cam.tPitch = s.pitch; cam.tDist = s.dist;
+  if (instant){
+    cam.target = s.target.slice(); cam.yaw = s.yaw; cam.pitch = s.pitch; cam.dist = s.dist;
+  }
+}
+function updateCamera(dt, rt){
+  if (cam.mode === 0){
+    shotT += dt;
+    var s = SHOTS[shotIdx];
+    if (shotT > s.dur){
+      shotT = 0;
+      shotIdx = (shotIdx + 1) % SHOTS.length;
+      s = SHOTS[shotIdx];
+      applyShot(s, false);
+      setCap(s.name, s.desc);
+    }
+    cam.tTarget = s.target;
+    cam.tYaw = s.yaw + (s.orbit ? T * 0.18 * s.orbit : Math.sin(T * 0.09 + shotIdx) * 0.16);
+    cam.tPitch = s.pitch + Math.sin(T * 0.13 + shotIdx * 2) * 0.03;
+    cam.tDist = s.dist * (1 + Math.sin(T * 0.07 + shotIdx) * 0.045);
+  }
+  var k = 1 - Math.pow(0.0015, dt);
+  if (cam.mode === 5) k = 1 - Math.pow(0.00001, dt);
+  cam.yaw = lerp(cam.yaw, cam.tYaw, k);
+  cam.pitch = lerp(cam.pitch, cam.tPitch, k);
+  cam.dist = lerp(cam.dist, cam.tDist, k);
+  for (var i = 0; i < 3; i++) cam.target[i] = lerp(cam.target[i], cam.tTarget[i], k);
+
+  cam.shake = Math.max(0, cam.shake - rt * 2.4);
+  var sh = cam.shake * cam.shake * 0.22;
+  var aspect = W / H;
+  var distK = aspect < 1.2 ? Math.min(1.45, 1 + (1.2 - aspect) * 0.5) : 1;
+  var dist = cam.dist * distK;
+  var cp = Math.cos(cam.pitch), spp = Math.sin(cam.pitch);
+  cam.eye[0] = cam.target[0] + Math.sin(cam.yaw) * cp * dist;
+  cam.eye[1] = cam.target[1] + spp * dist + 1.2;
+  cam.eye[2] = cam.target[2] + Math.cos(cam.yaw) * cp * dist;
+  cam.eye[0] += Math.sin(rt * 61) * sh;
+  cam.eye[1] += Math.sin(rt * 47) * sh;
+  m4.lookAt(view, cam.eye, [cam.target[0], cam.target[1] + Math.sin(rt * 53) * sh, cam.target[2]], [0, 1, 0]);
+  // 以水平視角為基準：直式螢幕自動加大 fovy，構圖才不會被切掉
+  var fovy = 2 * Math.atan(Math.tan(38 * PI / 180) / aspect);
+  m4.persp(proj, clamp(fovy, 50 * PI / 180, 70 * PI / 180), aspect, 0.5, 400);
+}
+
+/* --- 點光源 --- */
+function updateLights(){
+  // 0-3：舞台四盞搖頭燈；4：沖壓/焊接的暖光
+  var pulseK = 0.55 + 0.45 * beatPulse;
+  for (var i = 0; i < 4; i++){
+    var lp = stageLamps[i];
+    var wp = [0,0,0];
+    m4.xformPoint(wp, lp.head.world, [0, -3.2, 0]);
+    pPos[i*3] = wp[0]; pPos[i*3+1] = Math.max(1.0, wp[1]); pPos[i*3+2] = wp[2];
+    var g = discoOn ? (0.9 + 0.9 * pulseK) : 0.35;
+    // 換色：每 4 拍輪替色相
+    var shift = discoOn ? (0.6 + 0.4 * Math.sin(beat * PI * 0.5 + i * 1.7)) : 1;
+    pCol[i*3] = lp.rgb[0] * g * shift * 1.5;
+    pCol[i*3+1] = lp.rgb[1] * g * shift * 1.5;
+    pCol[i*3+2] = lp.rgb[2] * g * shift * 1.5;
+  }
+  var weldGlow = 0;
+  for (var a = 0; a < arms.length; a++) weldGlow = Math.max(weldGlow, arms[a].weld);
+  pPos[12] = press.x - 4; pPos[13] = BELT_Y + 1.6; pPos[14] = BELT_Z;
+  var w = 0.6 + weldGlow * 2.2 + press.hitAmt * 3.0;
+  pCol[12] = 1.0 * w; pCol[13] = 0.62 * w; pCol[14] = 0.22 * w;
+  gl.uniform3fv(U.uPPos, pPos);
+  gl.uniform3fv(U.uPCol, pCol);
+}
+
+/* =====================================================================
+   主迴圈
+   ===================================================================== */
+var last = 0, fps = 60, fpsAcc = 0, fpsN = 0, statT = 0, lowFrames = 0, autoShadow = true;
+function frame(now){
+  requestAnimationFrame(frame);
+  now *= 0.001;
+  var raw = last ? Math.min(0.05, now - last) : 0.016;
+  last = now;
+  var dt = raw * (running ? speed : 0);
+  T += dt;
+
+  var prevBeat = beat;
+  beat = T / BEAT;
+  beatPulse = Math.max(0, 1 - fract(beat) * 3.2);
+  if (Math.floor(beat) !== Math.floor(prevBeat)) beatIdx++;
+
+  if (dt > 0){
+    updateRobots(dt);
+    updateFactory(dt);
+    updateParticles(dt);
+  }
+  resize();
+  updateCamera(raw, now);
+
+  gl.viewport(0, 0, W, H);
+  gl.clearColor(FOG_COL[0], FOG_COL[1], FOG_COL[2], 1);
+  gl.clearStencil(0);
+  gl.depthMask(true);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+
+  gl.uniformMatrix4fv(U.uProj, false, proj);
+  gl.uniformMatrix4fv(U.uView, false, view);
+  gl.uniform3fv(U.uCam, cam.eye);
+  gl.uniform3fv(U.uKeyDir, keyDir);
+  gl.uniform3fv(U.uKeyCol, [0.62, 0.68, 0.80]);
+  gl.uniform3fv(U.uAmbTop, [0.20, 0.27, 0.38]);
+  gl.uniform3fv(U.uAmbBot, [0.045, 0.055, 0.085]);
+  gl.uniform3fv(U.uRimCol, [0.055, 0.13, 0.22]);
+  gl.uniform3fv(U.uFogCol, FOG_COL);
+  gl.uniform1f(U.uFog, 0.0072);
+  gl.uniform1f(U.uTime, T);
+  gl.uniform1f(U.uScroll, T * BELT_SPEED * 1.15);
+  gl.uniform1f(U.uShadowMode, 0);
+  updateLights();
+
+  if (roofNode) roofNode.visible = cam.eye[1] < 23.2;
+  drawCount = 0;
+  transparentQueue.length = 0;
+  curBlend = 'x';
+  setBlend(null);
+  // 需要先算好世界矩陣（燈光要用），故先跑一次 traverse 再畫
+  traverse(root, m4.ident(tmpM));
+  if (shadowOn && autoShadow && !wireOn) drawShadows();
+  // 透明件（光束、環）
+  transparentQueue.sort(function(a, b){
+    var da = a.world[12] - cam.eye[0], db = b.world[12] - cam.eye[0];
+    var ea = a.world[14] - cam.eye[2], eb2 = b.world[14] - cam.eye[2];
+    return (db*db + eb2*eb2) - (da*da + ea*ea);
+  });
+  for (var i = 0; i < transparentQueue.length; i++) drawMesh(transparentQueue[i]);
+  drawParticles();
+  setBlend(null);
+
+  // 統計
+  fpsAcc += Math.min(240, 1 / Math.max(1e-3, raw)); fpsN++;
+  statT += raw;
+  if (statT > 0.35){
+    fps = fpsAcc / fpsN; fpsAcc = 0; fpsN = 0; statT = 0;
+    elFps.textContent = fps.toFixed(0);
+    elDraw.textContent = drawCount;
+    elLine.textContent = (running ? BELT_SPEED * speed : 0).toFixed(2);
+    // 主齒輪角速度 = speed × baseSpin(0.55 rad/s) → RPM
+    elRpm.textContent = (running ? (0.55 * speed * 60 / TAU).toFixed(1) : '0.0');
+    elBpm.textContent = (running ? Math.round(BPM * speed) : 0);
+    // 低效能時自動關閉陰影
+    if (fps < 26){
+      lowFrames++;
+      if (lowFrames > 4 && autoShadow){    // 效能不足：自動關掉陰影並同步按鈕狀態
+        autoShadow = false; shadowOn = false; bShadow.classList.remove('on');
+      }
+    } else if (fps > 45) lowFrames = 0;
+  }
+  if (capTimer > 0){
+    capTimer -= raw;
+    if (capTimer <= 0) elCap.style.opacity = 0;
+  }
+}
+
+/* 除錯用的場景把手（不影響畫面） */
+window.__mecha = { gears: gears, arms: arms, robots: robots, engine: engine, cam: cam, meshes: MESH, crates: crates, press: press };
+
+/* 起動 */
+resize();
+setCap(SHOTS[0].name, SHOTS[0].desc);
+applyShot(SHOTS[0], true);
+cam.dist = 74;                  // 開場往內推
+cam.pitch = 0.52;
+// 第一張畫面真的畫出來之後才收掉載入畫面（軟體渲染的機器上編譯較慢）
+var booted = false;
+function bootDone(){
+  if (booted) return;
+  booted = true;
+  document.getElementById('load').classList.add('off');
+}
+requestAnimationFrame(function(t){
+  last = t * 0.001;                       // 先取得基準時間，第一幀才不會算出離譜的 FPS
+  requestAnimationFrame(function(t2){ frame(t2); requestAnimationFrame(bootDone); });
+});
+setTimeout(bootDone, 4000);
+
+})();
+</script>
+</body>
+</html>
