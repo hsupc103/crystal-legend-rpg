@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skeleton Tourbillon Pocket Watch</title>
+<style>
+  :root { --gold: #d9b56a; --ink: #0b0a09; --line: rgba(217,181,106,.28); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: #e9dfc9;
+    font-family: "Cormorant Garamond", "Hoefler Text", Garamond, "Times New Roman", serif; }
+  body { background: radial-gradient(ellipse at 50% 38%, #2b241b 0%, #14110d 48%, #070605 100%); }
+  canvas { display: block; position: fixed; inset: 0; touch-action: none; }
+  header { text-shadow: 0 1px 8px #000; position: fixed; top: 0; left: 0; right: 0; padding: 22px 16px 0; text-align: center; pointer-events: none; }
+  h1 { margin: 0; font-weight: 400; font-size: clamp(17px, 2.6vw, 27px); letter-spacing: .32em; text-transform: uppercase; color: var(--gold); }
+  header p { margin: 6px 0 0; font-style: italic; font-size: clamp(12px, 1.5vw, 15px); opacity: .62; letter-spacing: .08em; }
+  #panel { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    width: min(680px, calc(100vw - 32px)); padding: 14px 20px 12px; border: 1px solid var(--line); border-radius: 14px;
+    background: rgba(14,12,9,.74); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px 22px; align-items: end; }
+  .ctl.wide { grid-column: 1 / -1; }
+  label { display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); margin-bottom: 5px; }
+  label output { color: #e9dfc9; opacity: .75; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; margin: 0; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; background: linear-gradient(90deg, var(--gold), rgba(217,181,106,.25)); }
+  input[type=range]::-moz-range-track { height: 2px; background: linear-gradient(90deg, var(--gold), rgba(217,181,106,.25)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -8px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff3cf, #c79a45 55%, #6e5220); border: 1px solid #2a2010; box-shadow: 0 1px 5px #000; }
+  input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff3cf, #c79a45 55%, #6e5220); border: 1px solid #2a2010; }
+  input[type=range]:focus-visible, button:focus-visible { outline: 1px solid var(--gold); outline-offset: 3px; }
+  button { font: inherit; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); cursor: pointer;
+    background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px; white-space: nowrap; min-width: 132px; }
+  button:hover { background: rgba(217,181,106,.1); }
+  button[aria-pressed=true] { background: var(--gold); color: #17120a; border-color: var(--gold); }
+  #hint { position: fixed; right: 14px; top: 14px; font-size: 11px; letter-spacing: .12em; opacity: .4; text-align: right; pointer-events: none; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; font-size: 16px; }
+  @media (max-width: 560px) {
+    #panel { grid-template-columns: 1fr 1fr; padding: 12px 14px 10px; }
+    #panel button { grid-column: 1 / -1; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tourbillon à Squelette</h1>
+  <p>Montre de poche · échappement à ancre · 14,400 A/h</p>
+</header>
+<div id="hint">drag to orbit · scroll to zoom</div>
+<div id="panel">
+  <div class="ctl wide">
+    <label for="explode">Exploded view <output id="explodeOut">0%</output></label>
+    <input id="explode" type="range" min="0" max="100" value="0" step="1">
+  </div>
+  <div class="ctl">
+    <label for="speed">Time-lapse <output id="speedOut">1×</output></label>
+    <input id="speed" type="range" min="0" max="100" value="0" step="1">
+  </div>
+  <div class="ctl">
+    <label for="vol">Volume <output id="volOut">70%</output></label>
+    <input id="vol" type="range" min="0" max="100" value="70" step="1">
+  </div>
+  <button id="sound" aria-pressed="false">Sound · Off</button>
+</div>
+<div id="err"></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const TAU = Math.PI * 2;
+
+/* ───────────────────────── renderer / scene ───────────────────────── */
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+} catch (e) {
+  const el = document.getElementById('err');
+  el.style.display = 'grid'; el.textContent = 'WebGL is not available in this browser.';
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+// Procedural studio environment (no image files) so the metals have something to reflect.
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
+
+const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 1, 600);
+camera.position.set(0, 96, 78);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, -3);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.minDistance = 22;
+controls.maxDistance = 320;
+controls.enablePan = false;
+
+const key = new THREE.DirectionalLight(0xfff1dc, 2.4);
+key.position.set(34, 80, 30);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -36, right: 36, top: 36, bottom: -36, near: 10, far: 220 });
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.05; key.shadow.radius = 3;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x9fb8ff, 0.7); rim.position.set(-40, 30, -50); scene.add(rim);
+const warm = new THREE.PointLight(0xffb060, 500, 0, 2); warm.position.set(-30, 25, 40); scene.add(warm);
+
+/* ───────────────────────── materials ───────────────────────── */
+const M = {
+  brass:  new THREE.MeshStandardMaterial({ color: 0xd1a548, metalness: 1, roughness: 0.24 }),
+  gilt:   new THREE.MeshStandardMaterial({ color: 0xc79b46, metalness: 1, roughness: 0.46 }),
+  gold:   new THREE.MeshStandardMaterial({ color: 0xe0b558, metalness: 1, roughness: 0.16, side: THREE.DoubleSide }),
+  steel:  new THREE.MeshStandardMaterial({ color: 0xcfd4da, metalness: 1, roughness: 0.2 }),
+  blued:  new THREE.MeshStandardMaterial({ color: 0x1b3aa0, metalness: 1, roughness: 0.26 }),
+  spring: new THREE.MeshStandardMaterial({ color: 0x2a4bb8, metalness: 1, roughness: 0.3, side: THREE.DoubleSide }),
+  ruby:   new THREE.MeshPhysicalMaterial({ color: 0xc8102e, metalness: 0, roughness: 0.08, clearcoat: 1, emissive: 0x3a0008 }),
+  enamel: new THREE.MeshPhysicalMaterial({ color: 0xf4efe2, metalness: 0, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.08 }),
+  ink:    new THREE.MeshStandardMaterial({ color: 0x0c0c10, metalness: 0.1, roughness: 0.45 }),
+  glass:  new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0, roughness: 0, transmission: 1, thickness: 1.2,
+            ior: 1.77, envMapIntensity: 0.45, specularIntensity: 1, attenuationColor: 0xdfeeff, attenuationDistance: 60 }),
+};
+
+for (const k in M) if (k !== 'glass') M[k].envMapIntensity = 0.85;
+
+/* ───────────────────────── geometry helpers ───────────────────────── */
+const flat = g => g.rotateX(-Math.PI / 2);              // shape XY → horizontal, extrusion → +Y
+function extrude(shape, depth, bevel = 0) {
+  const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 28, bevelEnabled: bevel > 0,
+    bevelThickness: bevel, bevelSize: bevel, bevelSegments: 1 });
+  if (bevel) g.translate(0, 0, bevel);
+  return flat(g);
+}
+function mesh(geo, mat, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; return m;
+}
+const cyl = (r, h, mat, x = 0, y = 0, z = 0, seg = 32) => mesh(new THREE.CylinderGeometry(r, r, h, seg), mat, x, y + h / 2, z);
+
+// Spoke windows: annular sectors with parallel-sided spokes between them.
+function addWindows(shape, n, rIn, rOut, w, phase = 0) {
+  if (!n) return;
+  const di = Math.asin(w / rIn), dO = Math.asin(w / rOut);
+  for (let k = 0; k < n; k++) {
+    const a0 = phase + k * TAU / n, a1 = a0 + TAU / n, p = new THREE.Path();
+    p.absarc(0, 0, rOut, a0 + dO, a1 - dO, false);
+    p.absarc(0, 0, rIn, a1 - di, a0 + di, true);
+    p.closePath(); shape.holes.push(p);
+  }
+}
+// Spur gear with trapezoidal teeth; tooth 0 is centred on local angle 0.
+function gearGeo({ N, m, th, spokes = 0, hub = 0, rimW = 0, spokeW = 0 }) {
+  const r = N * m / 2, ra = r + m, rr = r - 1.25 * m, p = TAU / N, s = new THREE.Shape();
+  for (let i = 0; i < N; i++) {
+    const a = i * p;
+    [[rr, a - 0.24 * p], [ra, a - 0.10 * p], [ra, a + 0.10 * p], [rr, a + 0.24 * p]].forEach(([R, t], j) =>
+      (i === 0 && j === 0) ? s.moveTo(R * Math.cos(t), R * Math.sin(t)) : s.lineTo(R * Math.cos(t), R * Math.sin(t)));
+  }
+  s.closePath();
+  addWindows(s, spokes, hub, rr - rimW, spokeW);
+  return extrude(s, th, 0.1 * m);
+}
+function annulusGeo(rIn, rOut, th, bevel = 0, win = null) {
+  const s = new THREE.Shape(); s.absarc(0, 0, rOut, 0, TAU, false);
+  if (rIn > 0) { const h = new THREE.Path(); h.absarc(0, 0, rIn, 0, TAU, true); s.holes.push(h); }
+  if (win) addWindows(s, ...win);
+  return extrude(s, th, bevel);
+}
+// Rotation for gear B so that it meshes with gear A (A at angle a, phi = direction A→B).
+const meshAngle = (a, NA, NB, phi) => -(a - phi) * NA / NB + phi + Math.PI - Math.PI / NB;
+const dirAngle = (ax, az, bx, bz) => Math.atan2(-(bz - az), bx - ax);
+
+// Rectangular-section spiral (hairspring / mainspring); fn(s) → [radius, angle]
+function spiral(n, w, h, mat) {
+  const pos = new Float32Array((n + 1) * 12), nor = new Float32Array((n + 1) * 12), idx = [];
+  for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) {
+    const a = i * 4 + k, b = i * 4 + (k + 1) % 4, c = a + 4, d = b + 4; idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  g.setIndex(idx);
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const m = new THREE.Mesh(g, mat); m.castShadow = true; m.frustumCulled = false;
+  m.userData.update = fn => {
+    for (let i = 0; i <= n; i++) {
+      const [r, a] = fn(i / n), c = Math.cos(a), s = -Math.sin(a);
+      corners.forEach(([cr, cy], k) => {
+        const o = (i * 4 + k) * 3, R = r + cr * w;
+        pos[o] = R * c; pos[o + 1] = cy * h; pos[o + 2] = R * s;
+        nor[o] = cr * c * 0.707; nor[o + 1] = cy * 0.707; nor[o + 2] = cr * s * 0.707;
+      });
+    }
+    g.attributes.position.needsUpdate = true; g.attributes.normal.needsUpdate = true;
+  };
+  return m;
+}
+function jewel(x, y, z, r = 0.5) {
+  const g = new THREE.Group(); g.position.set(x, y, z);
+  g.add(cyl(r * 1.7, 0.1, M.gold));
+  const j = mesh(new THREE.SphereGeometry(r, 24, 12), M.ruby, 0, 0.08, 0); j.scale.y = 0.45; g.add(j);
+  return g;
+}
+function screw(x, y, z, r = 0.45, rot = 0) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = rot;
+  g.add(cyl(r, 0.2, M.blued, 0, 0, 0, 20));
+  g.add(mesh(new THREE.BoxGeometry(r * 1.9, 0.06, r * 0.22), M.ink, 0, 0.2, 0));
+  return g;
+}
+
+/* ───────────────────────── watch assembly ───────────────────────── */
+const watch = new THREE.Group(); watch.position.y = -3.4; scene.add(watch);
+const parts = [];                                         // everything that moves in the exploded view
+function layer(f, parent = watch) {
+  const g = new THREE.Group(); g.userData.f = f; parts.push(g); parent.add(g); return g;
+}
+
+// Train layout (mm-ish). Module 0.3; tooth counts give an exact 60:1 centre→carriage ratio.
+const TOURB = { x: 0, z: 13 };
+const CENTRE = { x: 0, z: 0 };
+const THIRD = { x: 8.237, z: 6.985 };                      // 10.8 from centre, 10.2 from tourbillon
+const BARREL = { x: -7.637, z: -7.637 };                   // 10.8 from centre
+const N = { barrel: 60, cPin: 12, centre: 64, tPin: 8, third: 60, cagePin: 8, fixed: 64, escPin: 8 };
+const ESC_D = (N.fixed + N.escPin) * 0.13 / 2;             // 4.68 — escape arbor radius inside the cage
+
+/* case band, pendant, crown, bow (static) */
+{
+  const pts = [];
+  for (let i = 0; i <= 18; i++) { const t = i / 18; pts.push(new THREE.Vector2(25.3 + 1.75 * Math.pow(Math.sin(Math.PI * t), 0.65), -2.9 + 12.6 * t)); }
+  pts.push(new THREE.Vector2(24, 9.6), new THREE.Vector2(24, -2.6), pts[0].clone());
+  watch.add(mesh(new THREE.LatheGeometry(pts, 128), M.gold));
+  const stem = cyl(1.5, 3.6, M.gold); stem.rotation.x = Math.PI / 2; stem.position.set(0, 3.4, -26.6); watch.add(stem);
+  const crown = mesh(new THREE.CylinderGeometry(2.7, 2.5, 2.4, 30),
+    new THREE.MeshStandardMaterial({ color: 0xe0b558, metalness: 1, roughness: 0.25, flatShading: true }));
+  crown.rotation.x = Math.PI / 2; crown.position.set(0, 3.4, -31.4); watch.add(crown);
+  watch.add(mesh(new THREE.SphereGeometry(1.5, 24, 16), M.gold, 0, 3.4, -33.2));
+  const bow = mesh(new THREE.TorusGeometry(4.4, 0.55, 16, 64), M.gold, 0, 3.4, -37.4); bow.rotation.x = Math.PI / 2; watch.add(bow);
+}
+
+/* case back */
+const back = layer(-3.1);
+{
+  const p = [[0, -4.3], [14, -4.15], [22, -3.7], [25.5, -2.95], [25.5, -2.65], [23.5, -2.65], [22, -3.1], [0, -3.4]]
+    .map(([r, y]) => new THREE.Vector2(r, y));
+  back.add(mesh(new THREE.LatheGeometry(p, 128), M.gold));
+}
+
+/* skeletonised main plate: outer ring + arms running to each pivot */
+const plate = layer(-2.1);
+{
+  plate.add(mesh(annulusGeo(19.9, 23.6, 0.8, 0.06), M.gilt, 0, -1.8, 0));
+  plate.add(cyl(2.6, 0.8, M.gilt, 0, -1.8, 0));
+  for (const [P, boss] of [[BARREL, 2.2], [THIRD, 1.7], [TOURB, 2.4], [{ x: 9.5, z: -11.5 }, 0]]) {
+    const len = 21, a = Math.atan2(-P.z, P.x);
+    const arm = mesh(new THREE.BoxGeometry(len, 0.8, 2.1), M.gilt, Math.cos(a) * len / 2, -1.4, -Math.sin(a) * len / 2);
+    arm.rotation.y = a; plate.add(arm);
+    if (boss) { plate.add(cyl(boss, 0.8, M.gilt, P.x, -1.8, P.z)); plate.add(jewel(P.x, -1.0, P.z, 0.42)); }
+  }
+  for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + 0.2; plate.add(screw(21.8 * Math.cos(a), -1.0, 21.8 * Math.sin(a), 0.5, a * 3)); }
+}
+
+/* mainspring barrel + ratchet */
+const barrelL = layer(-1.25);
+const barrel = new THREE.Group(); barrel.position.set(BARREL.x, 0, BARREL.z); barrelL.add(barrel);
+{
+  barrel.add(mesh(gearGeo({ N: N.barrel, m: 0.3, th: 0.6 }), M.brass, 0, -0.7, 0));
+  const drum = mesh(new THREE.CylinderGeometry(8.1, 8.1, 1.6, 64, 1, true),
+    new THREE.MeshStandardMaterial({ color: 0xd1a548, metalness: 1, roughness: 0.3, side: THREE.DoubleSide }), 0, 0.7, 0);
+  barrel.add(drum);
+  barrel.add(mesh(annulusGeo(0, 8.1, 0.22, 0.03, [5, 1.7, 7.2, 0.55]), M.brass, 0, 1.5, 0));
+  const ms = spiral(520, 0.05, 0.6, M.spring); ms.position.y = 0.65;
+  ms.userData.update(s => [1.3 + 6.4 * s, s * TAU * 9.5]); barrel.add(ms);
+  barrel.add(cyl(0.9, 5.2, M.steel, 0, -1.0, 0));
+  // ratchet wheel (winding) – steel, sits on the barrel arbor
+  barrel.add(mesh(gearGeo({ N: 36, m: 0.22, th: 0.35, spokes: 4, hub: 1.3, rimW: 0.55, spokeW: 0.35 }), M.steel, 0, 3.7, 0));
+  barrel.add(screw(0, 4.05, 0, 0.75, 0.6));
+}
+
+/* centre wheel (carries the minute hand) */
+const centreL = layer(-0.5);
+const centre = new THREE.Group(); centreL.add(centre);
+centre.add(mesh(gearGeo({ N: N.cPin, m: 0.3, th: 0.9 }), M.steel, 0, -0.85, 0));
+centre.add(mesh(gearGeo({ N: N.centre, m: 0.3, th: 0.4, spokes: 5, hub: 1.5, rimW: 0.75, spokeW: 0.38 }), M.brass, 0, 2.0, 0));
+centre.add(cyl(0.5, 10.6, M.steel, 0, -1.0, 0));
+
+/* third wheel */
+const thirdL = layer(0.3);
+const third = new THREE.Group(); third.position.set(THIRD.x, 0, THIRD.z); thirdL.add(third);
+third.add(mesh(gearGeo({ N: N.tPin, m: 0.3, th: 1.0 }), M.steel, 0, 1.7, 0));
+third.add(mesh(gearGeo({ N: N.third, m: 0.3, th: 0.4, spokes: 5, hub: 1.3, rimW: 0.7, spokeW: 0.34 }), M.brass, 0, 3.1, 0));
+third.add(cyl(0.38, 5.7, M.steel, 0, -1.0, 0));
+
+/* ── tourbillon ── */
+const tourb = layer(1.0); tourb.position.set(TOURB.x, 0, TOURB.z);
+// fixed fourth wheel: never turns; the escape pinion walks around it
+tourb.add(mesh(gearGeo({ N: N.fixed, m: 0.13, th: 0.28, spokes: 6, hub: 1.0, rimW: 0.45, spokeW: 0.2 }), M.brass, 0, 4.1, 0));
+const cage = new THREE.Group(); tourb.add(cage);
+
+const cagePinion = layer(-0.4, cage);
+cagePinion.add(mesh(gearGeo({ N: N.cagePin, m: 0.3, th: 1.0 }), M.steel, 0, 2.75, 0));
+cagePinion.add(cyl(0.3, 2.9, M.steel, 0, 1.9, 0));
+
+function cageFrame(y, th, rIn, rOut, armW, phase, mat) {
+  const g = new THREE.Group();
+  g.add(mesh(annulusGeo(rIn, rOut, th, 0.04), mat, 0, y, 0));
+  for (let i = 0; i < 3; i++) {
+    const a = phase + i * TAU / 3, L = rIn + 0.2;
+    const arm = mesh(new THREE.BoxGeometry(L, th, armW), mat, Math.cos(a) * L / 2, y + th / 2 + 0.04, -Math.sin(a) * L / 2);
+    arm.rotation.y = a; g.add(arm);
+  }
+  g.add(cyl(1.0, th + 0.08, mat, 0, y, 0));
+  return g;
+}
+const cageLower = layer(0.35, cage);
+cageLower.add(cageFrame(4.7, 0.3, 6.15, 6.85, 0.8, 0, M.steel));
+for (let i = 0; i < 3; i++) {                               // pillars
+  const a = Math.PI / 3 + i * TAU / 3;
+  cageLower.add(cyl(0.28, 2.6, M.steel, 6.5 * Math.cos(a), 4.9, -6.5 * Math.sin(a), 16));
+}
+cageLower.add(jewel(ESC_D, 5.04, 0, 0.26), jewel(ESC_D - 2.25, 5.04, 0, 0.26));
+
+// escape wheel + pinion
+const escL = layer(0.6, cage);
+const esc = new THREE.Group(); esc.position.set(ESC_D, 0, 0); escL.add(esc);
+{
+  const s = new THREE.Shape(), n = 15, p = TAU / n, rr = 1.45, rt = 2.0;
+  for (let i = 0; i < n; i++) {
+    const a = i * p;
+    [[rr, a], [rt, a + 0.55 * p], [rt, a + 0.68 * p], [rr, a + 0.76 * p]].forEach(([R, t], j) =>
+      (i + j === 0) ? s.moveTo(R * Math.cos(t), R * Math.sin(t)) : s.lineTo(R * Math.cos(t), R * Math.sin(t)));
+  }
+  s.closePath(); addWindows(s, 5, 0.42, 1.2, 0.1);
+  esc.add(mesh(extrude(s, 0.2, 0.015), M.steel, 0, 5.2, 0));
+  esc.add(mesh(gearGeo({ N: N.escPin, m: 0.13, th: 0.7 }), M.steel, 0, 3.9, 0));
+  esc.add(cyl(0.14, 1.9, M.steel, 0, 3.8, 0, 12));
+}
+
+// pallet fork (lever) with ruby pallets
+const forkL = layer(0.8, cage);
+const fork = new THREE.Group(); fork.position.set(ESC_D - 2.25, 5.25, 0); forkL.add(fork);
+{
+  fork.add(mesh(new THREE.BoxGeometry(1.5, 0.16, 0.22), M.steel, -0.75, 0.08, 0));
+  for (const s of [-1, 1]) {
+    fork.add(mesh(new THREE.BoxGeometry(0.34, 0.16, 0.12), M.steel, -1.55, 0.08, s * 0.17));   // fork horns
+    const arm = mesh(new THREE.BoxGeometry(1.3, 0.16, 0.22), M.steel, 0.3, 0.08, s * 0.56);
+    arm.rotation.y = -s * 1.08; fork.add(arm);
+    const pal = mesh(new THREE.BoxGeometry(0.42, 0.2, 0.16), M.ruby, 0.72, 0.08, s * 1.12);
+    pal.rotation.y = s * 0.5; fork.add(pal);
+  }
+  fork.add(cyl(0.2, 0.3, M.steel, 0, 0, 0, 16));
+}
+
+// balance wheel
+const balL = layer(1.2, cage);
+const balance = new THREE.Group(); balL.add(balance);
+{
+  balance.add(mesh(annulusGeo(3.3, 3.75, 0.45, 0.05), M.brass, 0, 6.2, 0));
+  for (let i = 0; i < 3; i++) {
+    const a = i * TAU / 3 + 0.5, arm = mesh(new THREE.BoxGeometry(3.4, 0.22, 0.42), M.brass, 1.7 * Math.cos(a), 6.42, -1.7 * Math.sin(a));
+    arm.rotation.y = a; balance.add(arm);
+  }
+  balance.add(cyl(0.55, 0.3, M.brass, 0, 6.3, 0));
+  for (let i = 0; i < 14; i++) {                            // timing screws on the rim
+    const a = i * TAU / 14, sc = mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.3, 10), M.gold, 3.88 * Math.cos(a), 6.45, -3.88 * Math.sin(a));
+    sc.rotation.z = Math.PI / 2; sc.rotation.y = a; balance.add(sc);
+  }
+  balance.add(cyl(0.16, 2.7, M.steel, 0, 4.95, 0, 12));     // staff
+  balance.add(cyl(0.8, 0.12, M.steel, 0, 5.55, 0));         // roller table
+  balance.add(cyl(0.085, 0.4, M.ruby, 0.68, 5.2, 0, 10));   // impulse pin
+}
+
+// hairspring: inner coil turns with the balance, outer coil is pinned to the cage
+const hairL = layer(1.55, cage);
+const hair = spiral(420, 0.03, 0.085, M.spring); hair.position.y = 6.98; hairL.add(hair);
+hairL.add(mesh(new THREE.BoxGeometry(0.3, 0.5, 0.3), M.steel, 2.75, 7.15, 0));               // stud
+
+const cageUpper = layer(1.95, cage);
+cageUpper.add(cageFrame(7.45, 0.25, 6.2, 6.75, 0.6, Math.PI / 3, M.steel));
+cageUpper.add(jewel(0, 7.78, 0, 0.36));
+{ // seconds pointer on the carriage
+  const s = new THREE.Shape(); s.moveTo(-0.32, 0); s.lineTo(0.32, 0); s.lineTo(0, 1.5); s.closePath();
+  const ptr = mesh(extrude(s, 0.12), M.blued, 0, 7.7, 0); ptr.rotation.y = -Math.PI / 6;
+  ptr.geometry.translate(0, 0, -5.6); cageUpper.add(ptr);
+}
+
+/* bridges */
+function fingerBridge(P, foot, y, ra, rb, mat) {
+  const g = new THREE.Group(), dx = foot.x - P.x, dz = foot.z - P.z, L = Math.hypot(dx, dz);
+  const s = new THREE.Shape(); s.absarc(0, 0, ra, Math.PI / 2, Math.PI * 1.5, false); s.absarc(L, 0, rb, -Math.PI / 2, Math.PI / 2, false); s.closePath();
+  const b = mesh(extrude(s, 0.5, 0.07), mat, P.x, y, P.z); b.rotation.y = Math.atan2(-dz, dx); g.add(b);
+  g.add(cyl(0.75, y + 1.0, mat, foot.x, -1.0, foot.z, 20));
+  g.add(screw(foot.x, y + 0.64, foot.z, 0.55, L));
+  g.add(jewel(P.x, y + 0.64, P.z, 0.48));
+  return g;
+}
+const bridges = layer(2.1);
+const out = (P, r) => { const d = Math.hypot(P.x, P.z); return { x: P.x / d * r, z: P.z / d * r }; };
+bridges.add(fingerBridge(BARREL, out(BARREL, 21.7), 4.6, 2.0, 1.3, M.gilt));
+bridges.add(fingerBridge(THIRD, out(THIRD, 21.7), 4.6, 1.5, 1.2, M.gilt));
+bridges.add(fingerBridge(CENTRE, { x: 15.35, z: -15.35 }, 4.6, 1.7, 1.2, M.gilt));
+const tBridge = layer(3.3);                                  // V-shaped polished steel tourbillon bridge
+for (const sx of [-1, 1]) tBridge.add(fingerBridge(TOURB, { x: sx * 9, z: 17.5 }, 8.1, 1.25, 1.0, M.steel));
+
+/* enamel chapter ring with Roman numerals built from bars */
+const dial = layer(4.1);
+{
+  dial.add(mesh(annulusGeo(20.3, 23.5, 0.25, 0.03), M.enamel, 0, 7.6, 0));
+  const H = 1.75, yN = 7.93, bar = (w, l) => new THREE.BoxGeometry(w, 0.05, l);
+  const roman = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+  const adv = { I: 0.42, V: 0.86, X: 0.86 };
+  roman.forEach((str, h) => {
+    const g = new THREE.Group(), a = h * TAU / 12, total = [...str].reduce((s, c) => s + adv[c], 0);
+    let x = -total / 2;
+    for (const c of str) {
+      const w = adv[c], cx = x + w / 2, gw = w - 0.2;
+      if (c === 'I') g.add(mesh(bar(0.17, H), M.ink, cx, 0, 0));
+      if (c === 'X') for (const s of [-1, 1]) { const b = mesh(bar(s < 0 ? 0.2 : 0.1, Math.hypot(H, gw)), M.ink, cx, 0, 0); b.rotation.y = s * Math.atan(gw / H); g.add(b); }
+      if (c === 'V') for (const s of [-1, 1]) { const b = mesh(bar(s < 0 ? 0.2 : 0.1, Math.hypot(H, gw / 2)), M.ink, cx + s * gw / 4, 0, 0); b.rotation.y = -s * Math.atan(gw / 2 / H); g.add(b); }
+      x += w;
+    }
+    for (const s of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(total + 0.1, 0.05, 0.09), M.ink, 0, 0, s * H / 2));   // serif rules
+    g.position.set(22.05 * Math.sin(a), yN, -22.05 * Math.cos(a)); g.rotation.y = -a; dial.add(g);
+  });
+  for (let i = 0; i < 60; i++) {
+    const a = i * TAU / 60, five = i % 5 === 0, t = mesh(new THREE.BoxGeometry(five ? 0.16 : 0.07, 0.05, five ? 0.55 : 0.35), M.ink,
+      20.72 * Math.sin(a), yN, -20.72 * Math.cos(a));
+    t.rotation.y = -a; dial.add(t);
+  }
+  dial.traverse(o => { if (o.isMesh && o.material === M.ink) o.castShadow = false; });
+}
+
+/* Breguet-style blued hands */
+function hand(L, w, y) {
+  const ro = L * 0.062, c = L * 0.66 + ro, shapes = [];
+  const shaft = new THREE.Shape(); shaft.moveTo(-w, 0); shaft.lineTo(w, 0); shaft.lineTo(w * 0.4, L * 0.665); shaft.lineTo(-w * 0.4, L * 0.665); shaft.closePath();
+  const ring = new THREE.Shape(); ring.absarc(0, c, ro, 0, TAU, false);
+  const hole = new THREE.Path(); hole.absarc(0, c + ro * 0.12, ro * 0.66, 0, TAU, true); ring.holes.push(hole);
+  const tip = new THREE.Shape(); tip.moveTo(-w * 0.4, c + ro * 0.95); tip.lineTo(w * 0.4, c + ro * 0.95); tip.lineTo(0, L); tip.closePath();
+  const hub = new THREE.Shape(); hub.absarc(0, 0, w * 2.2, 0, TAU, false);
+  shapes.push(shaft, ring, tip, hub);
+  return mesh(extrude(shapes, 0.16, 0.03), M.blued, 0, y, 0);
+}
+const hourL = layer(4.7), minL = layer(5.1);
+const hourHand = hand(12.2, 0.5, 9.0); hourL.add(hourHand);
+const minHand = hand(18.6, 0.42, 9.4); minL.add(minHand);
+minL.add(cyl(0.6, 0.3, M.gold, 0, 9.6, 0));
+
+/* bezel + domed sapphire crystal */
+const top = layer(6.3);
+{
+  const p = [[22.6, 9.7], [25.6, 9.7], [25.95, 10.2], [25.3, 10.9], [23.5, 11.25], [22.6, 10.7], [22.6, 9.7]].map(([r, y]) => new THREE.Vector2(r, y));
+  top.add(mesh(new THREE.LatheGeometry(p, 128), M.gold));
+  const a = 22.9, h = 3.6, Rc = (a * a + h * h) / (2 * h);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(Rc, 96, 32, 0, TAU, 0, Math.asin(a / Rc)), M.glass);
+  dome.position.y = 10.6 + h - Rc; dome.renderOrder = 10; top.add(dome);
+}
+
+/* ───────────────────────── kinematics ───────────────────────── */
+const PHI = {
+  cb: dirAngle(CENTRE.x, CENTRE.z, BARREL.x, BARREL.z),
+  c3: dirAngle(CENTRE.x, CENTRE.z, THIRD.x, THIRD.z),
+  t3: dirAngle(THIRD.x, THIRD.z, TOURB.x, TOURB.z),
+};
+const BEAT = 4;                       // beats per second (14,400 A/h, 2 Hz balance)
+const AMP = THREE.MathUtils.degToRad(215);
+const now = new Date();
+let T = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;  // train time, s
+let bt = 0, lastBeat = 0, speed = 1;
+let eTarget = 0, eNow = 0;
+const E_MAX = 6;
+const zoomFor = e => 1 + 0.7 * e;
+
+function pose() {
+  // At real speed the train advances in steps, released by the escapement at each beat.
+  const fr = (bt * BEAT) % 1;
+  const Td = speed <= 1.001 ? T + (THREE.MathUtils.smoothstep(fr, 0, 0.16) - fr) / BEAT : T;
+
+  const aC = -Td / 3600 * TAU;                                    // centre arbor: 1 rev / hour, clockwise
+  centre.rotation.y = aC;
+  minHand.rotation.y = aC;
+  hourHand.rotation.y = aC / 12;
+  barrel.rotation.y = meshAngle(aC, N.cPin, N.barrel, PHI.cb);
+  const a3 = meshAngle(aC, N.centre, N.tPin, PHI.c3);
+  third.rotation.y = a3;
+  const aCage = meshAngle(a3, N.third, N.cagePin, PHI.t3);         // 1 rev / minute
+  cage.rotation.y = aCage;
+  esc.rotation.y = meshAngle(0, N.fixed, N.escPin, aCage) - aCage; // rolls round the fixed fourth wheel
+
+  const th = AMP * Math.sin(TAU * (BEAT / 2) * bt);
+  balance.rotation.y = th;
+  fork.rotation.y = -0.17 * THREE.MathUtils.clamp(th / 0.3, -1, 1);
+  hair.userData.update(s => [0.55 + 2.2 * s, s * TAU * 8 + th * (1 - s)]);
+}
+
+/* ───────────────────────── audio: synthesised lever-escapement tick ───────────────────────── */
+let actx = null, master = null, bus = null, noise = null, soundOn = false, volume = 0.7;
+function initAudio() {
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  master = actx.createGain(); master.gain.value = volume; master.connect(actx.destination);
+  bus = actx.createGain();
+  const hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 700;
+  bus.connect(hp); hp.connect(master);
+  // short "case resonance" – a decaying-noise impulse response, generated here
+  const len = Math.floor(actx.sampleRate * 0.09), ir = actx.createBuffer(2, len, actx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 5); }
+  const conv = actx.createConvolver(); conv.buffer = ir;
+  const wet = actx.createGain(); wet.gain.value = 0.35; hp.connect(conv); conv.connect(wet); wet.connect(master);
+  noise = actx.createBuffer(1, Math.floor(actx.sampleRate * 0.06), actx.sampleRate);
+  const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+function click(t, amp, freq, q, dur) {            // filtered noise burst: metal-on-jewel impact
+  const src = actx.createBufferSource(); src.buffer = noise; src.loopStart = Math.random() * 0.03;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = q;
+  const g = actx.createGain(); g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+  src.connect(bp); bp.connect(g); g.connect(bus); src.start(t, Math.random() * 0.03); src.stop(t + dur + 0.01);
+}
+function ring(t, amp, freq, dur) {                // decaying partial: steel/brass ringing
+  const o = actx.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+  const g = actx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(amp, t + 0.0008);
+  g.gain.exponentialRampToValueAtTime(0.0003, t + dur);
+  o.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + 0.01);
+}
+function tick(tock) {
+  if (!soundOn || !actx || actx.state !== 'running') return;
+  const t = actx.currentTime + 0.004, k = tock ? 0.87 : 1, v = 0.9 + Math.random() * 0.2;
+  click(t, 0.45 * v, 3300 * k, 2.2, 0.005);                 // unlocking: jewel leaves the tooth
+  click(t + 0.0045, 1.0 * v, 5400 * k, 1.6, 0.011);         // impulse
+  click(t + 0.0115, 0.75 * v, 2500 * k, 2.6, 0.022);        // drop: next tooth lands, lever hits banking
+  [3020, 4610, 6240, 8450].forEach((f, i) => ring(t + 0.0045, 0.11 / (i + 1), f * k * (1 + (Math.random() - 0.5) * 0.006), 0.028 + i * 0.012));
+  ring(t + 0.0115, 0.16, 1180 * k, 0.04);
+}
+
+/* ───────────────────────── UI ───────────────────────── */
+const $ = id => document.getElementById(id);
+$('explode').addEventListener('input', e => { eTarget = e.target.value / 100; $('explodeOut').textContent = e.target.value + '%'; });
+$('speed').addEventListener('input', e => {
+  speed = Math.round(Math.pow(600, e.target.value / 100));       // 1× … 600×, logarithmic
+  $('speedOut').textContent = speed + '×';
+});
+$('vol').addEventListener('input', e => {
+  volume = e.target.value / 100; $('volOut').textContent = e.target.value + '%';
+  if (master) master.gain.setTargetAtTime(volume, actx.currentTime, 0.02);
+});
+$('sound').addEventListener('click', async () => {
+  soundOn = !soundOn;
+  if (soundOn) { if (!actx) initAudio(); await actx.resume(); }
+  $('sound').setAttribute('aria-pressed', soundOn);
+  $('sound').textContent = soundOn ? 'Sound · On' : 'Sound · Off';
+});
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); fit();
+});
+function fit() { camera.fov = camera.aspect < 1 ? 34 + (1 - camera.aspect) * 34 : 34; camera.updateProjectionMatrix(); }
+fit();
+
+/* ───────────────────────── loop ───────────────────────── */
+const clock = new THREE.Clock();
+const off = new THREE.Vector3();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  bt += dt; T += dt * speed;
+  const beat = Math.floor(bt * BEAT);
+  if (beat !== lastBeat) { lastBeat = beat; tick(beat & 1); }
+
+  const ePrev = eNow;
+  eNow += (eTarget - eNow) * (1 - Math.exp(-dt * 6));
+  if (Math.abs(eTarget - eNow) < 1e-4) eNow = eTarget;
+  if (eNow !== ePrev) {                                     // pull the camera back as the stack grows
+    for (const p of parts) p.position.y = p.userData.f * eNow * E_MAX;
+    off.copy(camera.position).sub(controls.target).multiplyScalar(zoomFor(eNow) / zoomFor(ePrev));
+    controls.target.y = eNow * 12;
+    camera.position.copy(controls.target).add(off);
+  }
+  pose();
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
