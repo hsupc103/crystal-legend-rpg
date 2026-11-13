@@ -581,7 +581,7 @@ function frame() {
   if (eNow !== ePrev) {                                     // pull the camera back as the stack grows
     for (const p of parts) p.position.y = p.userData.f * eNow * E_MAX;
     off.copy(camera.position).sub(controls.target).multiplyScalar(zoomFor(eNow) / zoomFor(ePrev));
-    controls.target.y = eNow * 12;
+    controls.target.y = eNow * 2;
     camera.position.copy(controls.target).add(off);
   }
   pose();
